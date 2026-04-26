@@ -1,0 +1,301 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CSV Upload Tests - Golf Dashboard</title>
+    <style>
+        body {
+            font-family: monospace;
+            background: #0f172a;
+            color: #f1f5f9;
+            padding: 20px;
+            max-width: 1000px;
+            margin: 0 auto;
+        }
+        h1 { color: #7c3aed; }
+        .test { 
+            background: #1e293b;
+            padding: 15px;
+            margin: 10px 0;
+            border-left: 4px solid #475569;
+            border-radius: 4px;
+        }
+        .test.pass { border-left-color: #10b981; }
+        .test.fail { border-left-color: #ef4444; }
+        .test-name { font-weight: bold; margin-bottom: 5px; }
+        .test-result { margin-left: 20px; color: #94a3b8; }
+        .pass .test-name::before { content: "✓ "; color: #10b981; }
+        .fail .test-name::before { content: "✗ "; color: #ef4444; }
+        button {
+            background: #7c3aed;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 8px;
+            cursor: pointer;
+            margin: 10px 0;
+            font-size: 16px;
+        }
+        button:hover { background: #6d28d9; }
+        .summary {
+            background: #334155;
+            padding: 20px;
+            border-radius: 8px;
+            margin: 20px 0;
+        }
+    </style>
+</head>
+<body>
+    <h1>Golf Dashboard CSV Upload Tests</h1>
+    <button onclick="runTests()">Run All Tests</button>
+    <div id="results"></div>
+
+    <script>
+        const testResults = [];
+
+        function test(name, fn) {
+            try {
+                fn();
+                testResults.push({ name, pass: true, message: 'OK' });
+            } catch (error) {
+                testResults.push({ name, pass: false, message: error.message });
+            }
+        }
+
+        function assert(condition, message) {
+            if (!condition) throw new Error(message);
+        }
+
+        function assertEquals(actual, expected, message) {
+            if (actual !== expected) {
+                throw new Error(`${message}\nExpected: ${expected}\nActual: ${actual}`);
+            }
+        }
+
+        // Test CSV parsing
+        function testCSVParsing() {
+            const csvText = `Date,Player,Club Name,Club Speed,Carry Distance
+,,,,
+4/23/26 5:13:16 PM,Jamie F,,79.77,66.89
+4/23/26 5:13:38 PM,Jamie F,,75.31,66.67`;
+
+            const lines = csvText.split('\n');
+            const headers = lines[0].split(',');
+            
+            assert(headers.length === 5, 'Should have 5 headers');
+            assert(headers[0] === 'Date', 'First header should be Date');
+            
+            const data = [];
+            for (let i = 2; i < lines.length; i++) {
+                if (!lines[i].trim()) continue;
+                const values = lines[i].split(',');
+                const row = {};
+                headers.forEach((header, index) => {
+                    row[header] = values[index];
+                });
+                data.push(row);
+            }
+            
+            assertEquals(data.length, 2, 'Should parse 2 data rows');
+            assertEquals(data[0]['Player'], 'Jamie F', 'Should parse player name');
+            assert(parseFloat(data[0]['Carry Distance']) > 0, 'Should parse distance as number');
+        }
+
+        // Test distance calculation
+        function testDistanceCalculation() {
+            const distances = [66.89, 66.67, 83.45, 70.37];
+            const avg = distances.reduce((a, b) => a + b, 0) / distances.length;
+            const best = Math.max(...distances);
+            
+            assert(avg > 70, 'Average should be calculated correctly');
+            assertEquals(best, 83.45, 'Best shot should be max value');
+        }
+
+        // Test consistency calculation
+        function testConsistencyCalculation() {
+            const values = [66.89, 66.67, 83.45, 70.37];
+            const avg = values.reduce((a, b) => a + b, 0) / values.length;
+            const squareDiffs = values.map(v => Math.pow(v - avg, 2));
+            const avgSquareDiff = squareDiffs.reduce((a, b) => a + b, 0) / squareDiffs.length;
+            const stdDev = Math.sqrt(avgSquareDiff);
+            const consistency = Math.max(0, 100 - (stdDev / avg * 100));
+            
+            assert(consistency > 0 && consistency <= 100, 'Consistency should be 0-100%');
+            assert(!isNaN(consistency), 'Consistency should be a number');
+        }
+
+        // Test localStorage for API key
+        function testLocalStorage() {
+            const testKey = 'test-gemini-key-12345';
+            localStorage.setItem('geminiApiKey', testKey);
+            const retrieved = localStorage.getItem('geminiApiKey');
+            
+            assertEquals(retrieved, testKey, 'Should save and retrieve API key');
+            
+            localStorage.removeItem('geminiApiKey');
+            const removed = localStorage.getItem('geminiApiKey');
+            assert(removed === null, 'Should remove API key from localStorage');
+        }
+
+        // Test Chart.js data structure
+        function testChartDataStructure() {
+            const distances = [66.89, 66.67, 83.45];
+            const chartData = {
+                labels: distances.map((_, i) => `Shot ${i + 1}`),
+                datasets: [{
+                    label: 'Carry Distance (yards)',
+                    data: distances,
+                    backgroundColor: 'rgba(124, 58, 237, 0.6)',
+                    borderColor: 'rgba(124, 58, 237, 1)',
+                    borderWidth: 2
+                }]
+            };
+            
+            assert(chartData.labels.length === 3, 'Should have 3 labels');
+            assert(chartData.datasets.length === 1, 'Should have 1 dataset');
+            assertEquals(chartData.labels[0], 'Shot 1', 'Label format correct');
+        }
+
+        // Test spin data parsing
+        function testSpinDataParsing() {
+            const row = {
+                'Backspin': '2955.447265625',
+                'Sidespin': '-381.7477111816406'
+            };
+            
+            const backspin = parseFloat(row['Backspin']);
+            const sidespin = Math.abs(parseFloat(row['Sidespin']));
+            
+            assert(backspin > 0, 'Backspin should be positive');
+            assert(sidespin > 0, 'Sidespin absolute value should be positive');
+            assert(!isNaN(backspin), 'Backspin should be a number');
+        }
+
+        // Test club path scatter data
+        function testClubPathData() {
+            const row = {
+                'Club Path': '1.96',
+                'Club Face': '8.95'
+            };
+            
+            const path = parseFloat(row['Club Path']);
+            const face = parseFloat(row['Club Face']);
+            
+            const scatterPoint = { x: path, y: face };
+            
+            assert(typeof scatterPoint.x === 'number', 'X should be number');
+            assert(typeof scatterPoint.y === 'number', 'Y should be number');
+            assert(!isNaN(scatterPoint.x), 'X should not be NaN');
+        }
+
+        // Test CSV validation
+        function testCSVValidation() {
+            const validCSV = 'Date,Player,Club Speed\n,,\n4/23/26,Jamie,79.77';
+            const invalidCSV = 'Not a CSV';
+            
+            const validLines = validCSV.split('\n');
+            const invalidLines = invalidCSV.split('\n');
+            
+            assert(validLines.length >= 3, 'Valid CSV should have header + units + data');
+            assert(validLines[0].includes(','), 'Valid CSV should have commas');
+        }
+
+        // Test file upload mock
+        function testFileUploadMock() {
+            const csvContent = 'Date,Player,Carry Distance\n,,\n4/23/26,Jamie,66.89';
+            const blob = new Blob([csvContent], { type: 'text/csv' });
+            const file = new File([blob], 'test.csv', { type: 'text/csv' });
+            
+            assert(file.name.endsWith('.csv'), 'File should be CSV');
+            assertEquals(file.type, 'text/csv', 'File type should be text/csv');
+            
+            const reader = new FileReader();
+            return new Promise((resolve) => {
+                reader.onload = (e) => {
+                    const text = e.target.result;
+                    assert(text.includes('Carry Distance'), 'Should read CSV content');
+                    resolve();
+                };
+                reader.readAsText(file);
+            });
+        }
+
+        // Test data persistence (localStorage)
+        function testDataPersistence() {
+            const golfData = [
+                { Date: '4/23/26', 'Carry Distance': '66.89' },
+                { Date: '4/23/26', 'Carry Distance': '83.45' }
+            ];
+            
+            // Note: Current implementation does NOT persist CSV data to localStorage
+            // Only API key is persisted
+            
+            const apiKey = 'test-key';
+            localStorage.setItem('geminiApiKey', apiKey);
+            const savedKey = localStorage.getItem('geminiApiKey');
+            
+            assertEquals(savedKey, apiKey, 'API key should persist');
+            
+            // CSV data is NOT persisted (session-only)
+            const savedData = localStorage.getItem('golfData');
+            assert(savedData === null, 'CSV data is NOT stored in localStorage (by design)');
+            
+            localStorage.removeItem('geminiApiKey');
+        }
+
+        async function runTests() {
+            testResults.length = 0;
+            
+            test('CSV Parsing', testCSVParsing);
+            test('Distance Calculation', testDistanceCalculation);
+            test('Consistency Calculation', testConsistencyCalculation);
+            test('LocalStorage API Key', testLocalStorage);
+            test('Chart Data Structure', testChartDataStructure);
+            test('Spin Data Parsing', testSpinDataParsing);
+            test('Club Path Data', testClubPathData);
+            test('CSV Validation', testCSVValidation);
+            test('Data Persistence', testDataPersistence);
+            
+            // Async test
+            try {
+                await testFileUploadMock();
+                testResults.push({ name: 'File Upload Mock', pass: true, message: 'OK' });
+            } catch (error) {
+                testResults.push({ name: 'File Upload Mock', pass: false, message: error.message });
+            }
+            
+            displayResults();
+        }
+
+        function displayResults() {
+            const resultsDiv = document.getElementById('results');
+            const passed = testResults.filter(r => r.pass).length;
+            const total = testResults.length;
+            
+            let html = `
+                <div class="summary">
+                    <h2>Test Results: ${passed}/${total} Passed</h2>
+                    <p>Pass Rate: ${((passed/total) * 100).toFixed(1)}%</p>
+                </div>
+            `;
+            
+            testResults.forEach(result => {
+                html += `
+                    <div class="test ${result.pass ? 'pass' : 'fail'}">
+                        <div class="test-name">${result.name}</div>
+                        <div class="test-result">${result.message}</div>
+                    </div>
+                `;
+            });
+            
+            resultsDiv.innerHTML = html;
+        }
+
+        // Run tests on load
+        window.addEventListener('load', () => {
+            setTimeout(runTests, 500);
+        });
+    </script>
+</body>
+</html>

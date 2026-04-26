@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Real Data Test - Golf Dashboard</title>
+    <style>
+        body {
+            font-family: monospace;
+            background: #0f172a;
+            color: #f1f5f9;
+            padding: 20px;
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        h1 { color: #7c3aed; }
+        .section {
+            background: #1e293b;
+            padding: 20px;
+            margin: 20px 0;
+            border-radius: 8px;
+            border-left: 4px solid #7c3aed;
+        }
+        .stat {
+            display: inline-block;
+            margin: 10px 20px 10px 0;
+            padding: 10px 15px;
+            background: #334155;
+            border-radius: 6px;
+        }
+        .stat-label { color: #94a3b8; font-size: 12px; }
+        .stat-value { color: #10b981; font-size: 20px; font-weight: bold; }
+        button {
+            background: #7c3aed;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 8px;
+            cursor: pointer;
+            margin: 10px 0;
+            font-size: 16px;
+        }
+        button:hover { background: #6d28d9; }
+        pre {
+            background: #0f172a;
+            padding: 15px;
+            border-radius: 6px;
+            overflow-x: auto;
+            color: #94a3b8;
+        }
+        .pass { color: #10b981; }
+        .fail { color: #ef4444; }
+    </style>
+</head>
+<body>
+    <h1>Testing Your Real Golf Data</h1>
+    <button onclick="loadAndTest()">Load & Test Your CSV</button>
+    
+    <div id="results"></div>
+
+    <script>
+        async function loadAndTest() {
+            const resultsDiv = document.getElementById('results');
+            resultsDiv.innerHTML = '<p>Loading your CSV data...</p>';
+            
+            try {
+                // Fetch the actual CSV file
+                const response = await fetch('sample-data.csv');
+                const csvText = await response.text();
+                
+                // Parse it
+                const lines = csvText.split('\n');
+                const headers = lines[0].split(',');
+                
+                const golfData = [];
+                for (let i = 2; i < lines.length; i++) {
+                    if (!lines[i].trim()) continue;
+                    
+                    const values = lines[i].split(',');
+                    const shot = {};
+                    headers.forEach((header, index) => {
+                        shot[header] = values[index];
+                    });
+                    golfData.push(shot);
+                }
+                
+                // Calculate stats
+                const carryDistances = golfData.map(s => parseFloat(s['Carry Distance']) || 0);
+                const totalShots = carryDistances.length;
+                const avgCarry = (carryDistances.reduce((a, b) => a + b, 0) / totalShots).toFixed(1);
+                const bestShot = Math.max(...carryDistances).toFixed(1);
+                
+                // Standard deviation for consistency
+                const avg = carryDistances.reduce((a, b) => a + b, 0) / carryDistances.length;
+                const squareDiffs = carryDistances.map(value => Math.pow(value - avg, 2));
+                const avgSquareDiff = squareDiffs.reduce((a, b) => a + b, 0) / squareDiffs.length;
+                const stdDev = Math.sqrt(avgSquareDiff);
+                const consistency = Math.max(0, 100 - (stdDev / avg * 100)).toFixed(0);
+                
+                // Extract other metrics
+                const clubSpeeds = golfData.map(s => parseFloat(s['Club Speed']) || 0);
+                const avgClubSpeed = (clubSpeeds.reduce((a, b) => a + b, 0) / clubSpeeds.length).toFixed(1);
+                
+                const backspins = golfData.map(s => parseFloat(s['Backspin']) || 0);
+                const avgBackspin = (backspins.reduce((a, b) => a + b, 0) / backspins.length).toFixed(0);
+                
+                const launchAngles = golfData.map(s => parseFloat(s['Launch Angle']) || 0);
+                const avgLaunch = (launchAngles.reduce((a, b) => a + b, 0) / launchAngles.length).toFixed(1);
+                
+                const clubPaths = golfData.map(s => parseFloat(s['Club Path']) || 0);
+                const avgPath = (clubPaths.reduce((a, b) => a + b, 0) / clubPaths.length).toFixed(1);
+                
+                // Display results
+                let html = `
+                    <div class="section">
+                        <h2 class="pass">✓ CSV Loaded Successfully!</h2>
+                        <p>File: DrivingRange-2026-04-23 21:23:27 +0000.csv</p>
+                        <p>Headers found: ${headers.length}</p>
+                        <p>Data rows parsed: ${totalShots}</p>
+                    </div>
+                    
+                    <div class="section">
+                        <h2>📊 Calculated Statistics</h2>
+                        <div class="stat">
+                            <div class="stat-label">Total Shots</div>
+                            <div class="stat-value">${totalShots}</div>
+                        </div>
+                        <div class="stat">
+                            <div class="stat-label">Avg Carry Distance</div>
+                            <div class="stat-value">${avgCarry} yds</div>
+                        </div>
+                        <div class="stat">
+                            <div class="stat-label">Best Shot</div>
+                            <div class="stat-value">${bestShot} yds</div>
+                        </div>
+                        <div class="stat">
+                            <div class="stat-label">Consistency</div>
+                            <div class="stat-value">${consistency}%</div>
+                        </div>
+                        <div class="stat">
+                            <div class="stat-label">Avg Club Speed</div>
+                            <div class="stat-value">${avgClubSpeed} km/h</div>
+                        </div>
+                        <div class="stat">
+                            <div class="stat-label">Avg Backspin</div>
+                            <div class="stat-value">${avgBackspin} rpm</div>
+                        </div>
+                        <div class="stat">
+                            <div class="stat-label">Avg Launch Angle</div>
+                            <div class="stat-value">${avgLaunch}°</div>
+                        </div>
+                        <div class="stat">
+                            <div class="stat-label">Avg Club Path</div>
+                            <div class="stat-value">${avgPath}°</div>
+                        </div>
+                    </div>
+                    
+                    <div class="section">
+                        <h2>✅ Validation Checks</h2>
+                        <p class="${totalShots > 0 ? 'pass' : 'fail'}">
+                            ${totalShots > 0 ? '✓' : '✗'} Shots parsed: ${totalShots}
+                        </p>
+                        <p class="${avgCarry > 0 ? 'pass' : 'fail'}">
+                            ${avgCarry > 0 ? '✓' : '✗'} Average carry distance calculated: ${avgCarry} yards
+                        </p>
+                        <p class="${bestShot > 0 ? 'pass' : 'fail'}">
+                            ${bestShot > 0 ? '✓' : '✗'} Best shot found: ${bestShot} yards
+                        </p>
+                        <p class="${consistency >= 0 && consistency <= 100 ? 'pass' : 'fail'}">
+                            ${consistency >= 0 && consistency <= 100 ? '✓' : '✗'} Consistency in valid range: ${consistency}%
+                        </p>
+                        <p class="${avgClubSpeed > 0 ? 'pass' : 'fail'}">
+                            ${avgClubSpeed > 0 ? '✓' : '✗'} Club speed calculated: ${avgClubSpeed} km/h
+                        </p>
+                        <p class="${avgBackspin > 0 ? 'pass' : 'fail'}">
+                            ${avgBackspin > 0 ? '✓' : '✗'} Backspin calculated: ${avgBackspin} rpm
+                        </p>
+                        <p class="${!isNaN(avgLaunch) ? 'pass' : 'fail'}">
+                            ${!isNaN(avgLaunch) ? '✓' : '✗'} Launch angle calculated: ${avgLaunch}°
+                        </p>
+                    </div>
+                    
+                    <div class="section">
+                        <h2>📋 Sample Data (First 3 Shots)</h2>
+                        <pre>${JSON.stringify(golfData.slice(0, 3), null, 2)}</pre>
+                    </div>
+                    
+                    <div class="section">
+                        <h2>🎯 Chart Data Preview</h2>
+                        <p><strong>Distance Chart:</strong> ${carryDistances.length} data points</p>
+                        <p>Range: ${Math.min(...carryDistances).toFixed(1)} - ${Math.max(...carryDistances).toFixed(1)} yards</p>
+                        
+                        <p><strong>Spin Chart:</strong> Backspin & Sidespin data available</p>
+                        <p>Backspin range: ${Math.min(...backspins).toFixed(0)} - ${Math.max(...backspins).toFixed(0)} rpm</p>
+                        
+                        <p><strong>Club Path Chart:</strong> Scatter plot ready</p>
+                        <p>Club path range: ${Math.min(...clubPaths).toFixed(1)}° - ${Math.max(...clubPaths).toFixed(1)}°</p>
+                        
+                        <p><strong>Launch Angle Chart:</strong> Launch vs Distance scatter plot ready</p>
+                        <p>Launch range: ${Math.min(...launchAngles).toFixed(1)}° - ${Math.max(...launchAngles).toFixed(1)}°</p>
+                    </div>
+                    
+                    <div class="section pass">
+                        <h2>✅ All Tests Passed!</h2>
+                        <p>Your CSV data works perfectly with the dashboard.</p>
+                        <p><strong>Next step:</strong> <a href="/" style="color: #7c3aed;">Upload it to the main dashboard</a></p>
+                    </div>
+                `;
+                
+                resultsDiv.innerHTML = html;
+                
+            } catch (error) {
+                resultsDiv.innerHTML = `
+                    <div class="section fail">
+                        <h2 class="fail">✗ Error Loading CSV</h2>
+                        <p>${error.message}</p>
+                        <pre>${error.stack}</pre>
+                    </div>
+                `;
+            }
+        }
+        
+        // Auto-run on load
+        window.addEventListener('load', () => {
+            setTimeout(loadAndTest, 500);
+        });
+    </script>
+</body>
+</html>

@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Garmin R10 Golf Analytics</title>
+    <link rel="stylesheet" href="styles.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+</head>
+<body>
+    <button class="sessions-toggle" id="sessionsToggle">
+        <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M3 12h18M3 6h18M3 18h18"/>
+        </svg>
+        Sessions
+    </button>
+
+    <div class="sessions-panel" id="sessionsPanel">
+        <div class="sessions-panel-header">
+            <div class="sessions-panel-title">Session History</div>
+            <button class="sessions-panel-close" id="sessionsPanelClose">&times;</button>
+            <button class="new-session-btn" id="saveSessionBtn">Save Current Session</button>
+        </div>
+        <div class="sessions-list" id="sessionsList">
+            <div style="text-align: center; color: var(--text-secondary); padding: 40px 20px;">
+                No sessions saved yet
+            </div>
+        </div>
+    </div>
+
+    <div class="container">
+        <header>
+            <h1>Golf Launch Monitor</h1>
+            <p class="subtitle">Professional Swing Analytics</p>
+        </header>
+
+        <div class="upload-section">
+            <div class="upload-card">
+                <input type="file" id="csvFile" accept=".csv" hidden>
+                <label for="csvFile" class="upload-button">
+                    <svg width="24" height="24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12"/>
+                    </svg>
+                    Upload CSV Data
+                </label>
+                <p class="upload-hint">or drag and drop your Garmin R10 file here</p>
+            </div>
+
+            <div class="api-config">
+                <input type="password" id="geminiKey" placeholder="Gemini API Key (optional)" />
+                <button id="saveKey" class="secondary-button">Save</button>
+            </div>
+        </div>
+
+        <div id="dataLoaded" class="hidden">
+            <div class="swing-score">
+                <div class="swing-score-label">AI Swing Score</div>
+                <div class="swing-score-value" id="swingScore">--</div>
+                <div class="swing-score-desc" id="swingScoreDesc">Upload data to analyze</div>
+            </div>
+
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <div class="stat-label">Total Shots</div>
+                    <div class="stat-value" id="totalShots">0</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-label">Avg Carry Distance</div>
+                    <div class="stat-value" id="avgCarry">0 yds</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-label">Best Shot</div>
+                    <div class="stat-value" id="bestShot">0 yds</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-label">Consistency</div>
+                    <div class="stat-value" id="consistency">0%</div>
+                </div>
+            </div>
+
+            <div class="charts-grid">
+                <div class="chart-card dispersion-chart">
+                    <h3>Shot Dispersion (Driving Range View)</h3>
+                    <canvas id="dispersionChart"></canvas>
+                </div>
+                <div class="chart-card">
+                    <h3>Distance vs Optimal</h3>
+                    <canvas id="distanceChart"></canvas>
+                </div>
+                <div class="chart-card">
+                    <h3>Launch Conditions vs Tour Pro</h3>
+                    <canvas id="launchChart"></canvas>
+                </div>
+                <div class="chart-card">
+                    <h3>Spin vs Skill Level</h3>
+                    <canvas id="spinChart"></canvas>
+                </div>
+                <div class="chart-card">
+                    <h3>Club Path Accuracy (Circular Zone)</h3>
+                    <canvas id="pathChart"></canvas>
+                </div>
+                <div class="chart-card">
+                    <h3>Smash Factor Distribution</h3>
+                    <canvas id="smashChart"></canvas>
+                </div>
+                <div class="chart-card">
+                    <h3>Attack Angle Consistency</h3>
+                    <canvas id="attackChart"></canvas>
+                </div>
+                <div class="chart-card">
+                    <h3>Shot Consistency Timeline</h3>
+                    <canvas id="consistencyChart"></canvas>
+                </div>
+            </div>
+
+            <div class="insights-section">
+                <h3>Performance Analysis</h3>
+                <div id="insights" class="insights-content">
+                    <div class="loading">Upload data to see automatic analysis...</div>
+                </div>
+                <button id="generateInsights" class="primary-button">Generate Advanced AI Analysis</button>
+            </div>
+
+            <div class="drills-section">
+                <h3>Recommended Training</h3>
+                <div id="drills" class="drills-content">
+                    <div class="drill-card">
+                        <h4>Alignment Stick Drill</h4>
+                        <p>Place alignment sticks to improve path consistency</p>
+                    </div>
+                    <div class="drill-card">
+                        <h4>Towel Drill</h4>
+                        <p>Place towel 6" behind ball to eliminate fat shots</p>
+                    </div>
+                    <div class="drill-card">
+                        <h4>Impact Bag Work</h4>
+                        <p>Improve contact and compression at impact</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="analysis.js"></script>
+    <script src="sessions.js"></script>
+    <script src="app.js"></script>
+</body>
+</html>
