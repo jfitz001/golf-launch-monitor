@@ -1,0 +1,12 @@
+.env
+.autoresearch-ui/
+.autoresearch/
+.playwright-cli/
+node_modules/
+output/
+*.log
+.DS_Store
+
+# Local Netlify folder
+.netlify
+deploy.zip

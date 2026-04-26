@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <title>Admin Dashboard - Golf Analytics</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600;9..144,700&family=Sora:wght@400;500;600;700;800&display=swap">
+    <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="styles-auth.css">
+    <link rel="stylesheet" href="styles-admin.css">
+    <link rel="stylesheet" href="netlify-identity.css">
+    <script defer src="https://identity.netlify.com/v1/netlify-identity-widget.js"></script>
+</head>
+<body>
+    <!-- Auth Section -->
+    <div id="auth-section" class="auth-section hidden">
+        <div class="auth-card">
+            <h2>Golf Launch Monitor</h2>
+            <p>Admin access required</p>
+            <button id="login-btn" class="primary-button">Sign In</button>
+        </div>
+    </div>
+
+    <!-- App Section -->
+    <div id="app-section">
+        <div class="container">
+            <header>
+                <div class="header-top-row">
+                    <div>
+                        <h1>Admin Dashboard</h1>
+                        <p class="subtitle">Manage API limits and system settings</p>
+                    </div>
+                    <div class="user-bar">
+                        <span id="user-email"></span>
+                        <button id="logout-btn" class="secondary-button">Logout</button>
+                    </div>
+                </div>
+                <nav class="main-nav">
+                    <a href="/upload" class="nav-link">Add Shots</a>
+                    <a href="/progress" class="nav-link">Trends</a>
+                    <a href="/charts" class="nav-link">Shot Charts</a>
+                    <a href="/analysis" class="nav-link">Coach Notes</a>
+                    <a href="/training" class="nav-link">Drills</a>
+                    <a href="/data" class="nav-link">Shot Editor</a>
+                    <a href="/settings" class="nav-link">Profile</a>
+                    <a href="/admin" class="nav-link active">Admin</a>
+                </nav>
+            </header>
+            
+            <div id="admin-content" style="display: none;">
+            <!-- API Usage Stats -->
+            <div class="admin-section">
+                <h2>API Usage Statistics</h2>
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <p>Total API Calls Today</p>
+                        <h3 id="api-calls-today">0</h3>
+                    </div>
+                    <div class="stat-card">
+                        <p>Total Users</p>
+                        <h3 id="total-users">0</h3>
+                    </div>
+                    <div class="stat-card">
+                        <p>API Calls This Month</p>
+                        <h3 id="api-calls-month">0</h3>
+                    </div>
+                    <div class="stat-card">
+                        <p>Rate Limit Hits</p>
+                        <h3 id="rate-limit-hits">0</h3>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Rate Limit Controls -->
+            <div class="admin-section">
+                <h2>Rate Limit Configuration</h2>
+                <div class="config-card">
+                    <div class="config-row">
+                        <label for="requests-per-minute">Requests per Minute</label>
+                        <input type="number" id="requests-per-minute" value="10" min="1" max="100">
+                    </div>
+                    <div class="config-row">
+                        <label for="requests-per-hour">Requests per Hour</label>
+                        <input type="number" id="requests-per-hour" value="100" min="1" max="1000">
+                    </div>
+                    <div class="config-row">
+                        <label for="requests-per-day">Requests per Day</label>
+                        <input type="number" id="requests-per-day" value="500" min="1" max="10000">
+                    </div>
+                    <button id="save-rate-limits" class="primary-button">Save Rate Limits</button>
+                </div>
+            </div>
+
+            <!-- API Request Log -->
+            <div class="admin-section">
+                <h2>Recent API Requests</h2>
+                <div class="log-container">
+                    <table class="log-table">
+                        <thead>
+                            <tr>
+                                <th>Timestamp</th>
+                                <th>User</th>
+                                <th>Endpoint</th>
+                                <th>Status</th>
+                                <th>Response Time</th>
+                            </tr>
+                        </thead>
+                        <tbody id="api-log-body">
+                            <tr>
+                                <td colspan="5" class="empty-log">No recent requests</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Data Migration Tool -->
+            <div class="admin-section">
+                <h2>Data Migration</h2>
+                <div class="config-card">
+                    <p style="margin-bottom: 16px; color: var(--text-secondary);">
+                        Migrate existing localStorage sessions to Supabase database for permanent storage and multi-device sync.
+                    </p>
+                    <div style="display: flex; gap: 12px; align-items: center;">
+                        <button id="migrate-data-btn" class="primary-button">Migrate LocalStorage Data</button>
+                        <span id="migration-status" style="color: var(--text-secondary);"></span>
+                    </div>
+                    <div id="migration-results" style="margin-top: 16px; display: none;">
+                        <h3>Migration Results</h3>
+                        <div id="migration-report"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- User Management -->
+            <div class="admin-section">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+                    <h2 style="margin: 0;">User Management</h2>
+                    <button class="secondary-button" onclick="addUserByEmail()">Add User By Email</button>
+                </div>
+                <div class="user-list">
+                    <table class="log-table">
+                        <thead>
+                            <tr>
+                                <th>Email</th>
+                                <th>Role</th>
+                                <th>Last Active</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="user-list-body">
+                            <tr>
+                                <td colspan="4" class="empty-log">Loading users...</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+        </div> <!-- End container -->
+
+        <div id="access-denied" style="display: none; margin-top: 100px;">
+            <div class="auth-card">
+                <h2>Access Denied</h2>
+                <p>You don't have permission to access the admin dashboard.</p>
+                <a href="/upload" class="primary-button" style="display: inline-block; text-decoration: none; margin-top: 20px;">Go to Dashboard</a>
+            </div>
+        </div>
+    </div>
+
+    <script defer src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script defer src="supabase-client.js"></script>
+    <script defer src="sync-service.js"></script>
+    <script defer src="auth.js"></script>
+    <script defer src="admin.js"></script>
+    <script defer src="animations.js"></script>
+</body>
+</html>

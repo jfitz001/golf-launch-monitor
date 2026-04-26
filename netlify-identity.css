@@ -1,0 +1,22 @@
+/* Hide Netlify branding */
+.netlifyIdentity-footer {
+    display: none !important;
+}
+
+.netlifyIdentity-providers {
+    margin-bottom: 0 !important;
+}
+
+/* Style the identity widget */
+.netlifyIdentity-modal {
+    background: rgba(15, 23, 42, 0.95) !important;
+}
+
+.netlifyIdentity-modal-dialog {
+    background: var(--surface, #1e293b) !important;
+    border-radius: 16px !important;
+}
+
+.netlifyIdentity-header {
+    background: linear-gradient(135deg, #10b981, #06b6d4) !important;
+}

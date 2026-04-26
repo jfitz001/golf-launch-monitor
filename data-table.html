@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <title>Shot Data Table - Golf Analytics</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600;9..144,700&family=Sora:wght@400;500;600;700;800&display=swap">
+    <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="styles-auth.css">
+    <link rel="stylesheet" href="styles-table.css">
+    <link rel="stylesheet" href="netlify-identity.css">
+    <script defer src="https://identity.netlify.com/v1/netlify-identity-widget.js"></script>
+</head>
+<body>
+    <!-- Auth Section -->
+    <div id="auth-section" class="auth-section hidden">
+        <div class="auth-card">
+            <h2>Golf Launch Monitor</h2>
+            <p>Sign in to view and edit your data</p>
+            <button id="login-btn" class="primary-button">Sign In / Sign Up</button>
+        </div>
+    </div>
+
+    <!-- App Section -->
+    <div id="app-section">
+        <header>
+            <div class="header-top-row">
+                <div>
+                    <h1>Shot Data Table</h1>
+                    <p>View, edit, and manage your shot data</p>
+                </div>
+                <div class="user-bar">
+                    <span id="user-email"></span>
+                    <button id="logout-btn" class="secondary-button">Logout</button>
+                </div>
+            </div>
+            <nav class="main-nav">
+                <a href="/upload" class="nav-link">Add Shots</a>
+                <a href="/progress" class="nav-link">Trends</a>
+                <a href="/charts" class="nav-link">Shot Charts</a>
+                <a href="/analysis" class="nav-link">Coach Notes</a>
+                <a href="/training" class="nav-link">Drills</a>
+                <a href="/data" class="nav-link active">Shot Editor</a>
+                <a href="/settings" class="nav-link">Profile</a>
+                <a href="/admin" class="nav-link" id="admin-link" style="display: none;">Admin</a>
+            </nav>
+        </header>
+
+        <div class="container">
+            <div class="table-controls">
+                <button id="add-row-btn" class="primary-button">+ Add Shot</button>
+                <button id="export-csv-btn" class="secondary-button">Export CSV</button>
+                <button id="delete-selected-btn" class="danger-button" style="display: none;">Delete Selected</button>
+            </div>
+
+            <div id="table-container" class="table-container">
+                <div class="empty-state">
+                    <h3>No Data Loaded</h3>
+                    <p>Go to the <a href="/upload">Dashboard</a> and upload a CSV file to get started.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script defer src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script defer src="supabase-client.js"></script>
+    <script defer src="sync-service.js"></script>
+    <script defer src="auth.js"></script>
+    <script defer src="data-table.js"></script>
+    <script defer src="animations.js"></script>
+</body>
+</html>

@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Supabase Debug - Golf Analytics</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>Supabase Connection Debugger</h1>
+            <p class="subtitle">Check your Supabase connection and data</p>
+        </header>
+
+        <div style="background: white; border-radius: 16px; padding: 32px; margin-bottom: 24px;">
+            <h2>Database Status</h2>
+            <button onclick="checkConnection()" class="primary-button" style="margin-top: 16px;">Check Connection</button>
+            <div id="status" style="margin-top: 24px; padding: 16px; background: var(--surface-light); border-radius: 12px; font-family: monospace; white-space: pre-wrap;"></div>
+        </div>
+
+        <div style="background: white; border-radius: 16px; padding: 32px;">
+            <h2>Quick Fixes</h2>
+            <ol style="line-height: 2;">
+                <li><strong>Log out and log back in</strong> - This syncs your user to Supabase</li>
+                <li><strong>Check browser console</strong> - Press F12 and look for errors</li>
+                <li><strong>Verify migration ran</strong> - Check Supabase dashboard → SQL Editor</li>
+                <li><strong>Check environment variables</strong> - Netlify dashboard → Site settings → Environment variables</li>
+            </ol>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script type="text/javascript" src="https://identity.netlify.com/v1/netlify-identity-widget.js"></script>
+    <script>
+        async function checkConnection() {
+            const statusDiv = document.getElementById('status');
+            statusDiv.textContent = 'Checking...\n';
+
+            const log = (msg) => {
+                statusDiv.textContent += msg + '\n';
+            };
+
+            // Check Netlify Identity
+            log('1. Checking Netlify Identity...');
+            const user = netlifyIdentity?.currentUser();
+            if (user) {
+                log(`✅ Logged in as: ${user.email}`);
+            } else {
+                log('❌ Not logged in to Netlify Identity');
+                log('→ Please log in first');
+                return;
+            }
+
+            // Check environment variables
+            log('\n2. Checking Netlify Functions...');
+            try {
+                const syncResponse = await fetch('/.netlify/functions/sync-user', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        email: user.email,
+                        netlify_id: user.id
+                    })
+                });
+
+                if (syncResponse.ok) {
+                    const result = await syncResponse.json();
+                    log(`✅ Sync function working`);
+                    log(`   User ID: ${result.user_id || 'N/A'}`);
+                } else {
+                    const errorText = await syncResponse.text();
+                    log(`❌ Sync function failed: ${syncResponse.status}`);
+                    log(`   Error: ${errorText}`);
+                }
+            } catch (error) {
+                log(`❌ Error calling sync function: ${error.message}`);
+            }
+
+            // Check session save
+            log('\n3. Checking session save...');
+            try {
+                const testSession = {
+                    name: 'Test Session',
+                    date: new Date().toISOString(),
+                    timestamp: Date.now(),
+                    data: [{ 'Carry Distance': 150, 'Club': '7 Iron' }],
+                    swingScore: { score: 75, description: 'Test' },
+                    stats: { avgCarry: 150, shots: 1 }
+                };
+
+                const saveResponse = await fetch('/.netlify/functions/save-session', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        session: testSession,
+                        userEmail: user.email
+                    })
+                });
+
+                if (saveResponse.ok) {
+                    log(`✅ Session save function working`);
+                    log(`   Test session saved successfully`);
+                } else {
+                    const errorText = await saveResponse.text();
+                    log(`❌ Session save failed: ${saveResponse.status}`);
+                    log(`   Error: ${errorText}`);
+                    
+                    if (errorText.includes('relation') || errorText.includes('does not exist')) {
+                        log('\n💡 SOLUTION: Run the Supabase migration!');
+                        log('   Go to: https://supabase.com/dashboard');
+                        log('   Click: SQL Editor');
+                        log('   Paste and run the migration SQL');
+                    }
+                }
+            } catch (error) {
+                log(`❌ Error saving session: ${error.message}`);
+            }
+
+            log('\n✅ Debug complete!');
+        }
+    </script>
+</body>
+</html>

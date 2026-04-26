@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <title>Garmin R10 Golf Analytics</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600;9..144,700&family=Sora:wght@400;500;600;700;800&display=swap">
+    <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="styles-auth.css">
+    <link rel="stylesheet" href="styles-table.css">
+    <link rel="stylesheet" href="netlify-identity.css">
+    <script defer src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <script defer src="https://identity.netlify.com/v1/netlify-identity-widget.js"></script>
+</head>
+<body>
+    <!-- Auth Section -->
+    <div id="auth-section" class="auth-section hidden">
+        <div class="auth-card">
+            <h2>Golf Launch Monitor</h2>
+            <p>Sign in to save your data and access from anywhere</p>
+            <button id="login-btn" class="primary-button">Sign In / Sign Up</button>
+        </div>
+    </div>
+
+    <!-- App Section (shown after login) -->
+    <div id="app-section">
+        <button class="sessions-toggle" id="sessionsToggle">
+        <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M3 12h18M3 6h18M3 18h18"/>
+        </svg>
+        Sessions
+    </button>
+
+    <div class="sessions-overlay" id="sessionsOverlay"></div>
+    <div class="sessions-panel" id="sessionsPanel">
+        <div class="sessions-panel-header">
+            <div class="sessions-panel-title">Session History</div>
+            <button class="sessions-panel-close" id="sessionsPanelClose">&times;</button>
+            <button class="new-session-btn" id="saveSessionBtn">Save Current Session</button>
+        </div>
+        <div class="sessions-list" id="sessionsList">
+            <div style="text-align: center; color: var(--text-secondary); padding: 40px 20px;">
+                No sessions saved yet
+            </div>
+        </div>
+    </div>
+
+    <div class="container">
+        <header>
+            <div class="header-top-row">
+                <div>
+                    <h1>Golf Launch Monitor</h1>
+                    <p class="subtitle">Professional Swing Analytics</p>
+                </div>
+                <div class="user-bar">
+                    <span id="user-email"></span>
+                    <button id="logout-btn" class="secondary-button">Logout</button>
+                </div>
+            </div>
+            <nav class="main-nav">
+                <a href="/upload" class="nav-link active">Add Shots</a>
+                <a href="/progress" class="nav-link">Trends</a>
+                <a href="/charts" class="nav-link">Shot Charts</a>
+                <a href="/analysis" class="nav-link">Coach Notes</a>
+                <a href="/training" class="nav-link">Drills</a>
+                <a href="/data" class="nav-link">Shot Editor</a>
+                    <a href="/settings" class="nav-link">Profile</a>
+                    <a href="/admin" class="nav-link" id="admin-link" style="display: none;">Admin</a>
+            </nav>
+        </header>
+
+        <div class="upload-section">
+            <div class="upload-card">
+                <input type="file" id="csvFile" accept=".csv" multiple hidden>
+                <label for="csvFile" class="upload-button">
+                    <svg width="24" height="24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12"/>
+                    </svg>
+                    Upload CSV File(s)
+                </label>
+                <p class="upload-hint">Select one or many Garmin R10 CSV files, or drag and drop a batch</p>
+                <p class="upload-summary" id="uploadSummary">No files uploaded yet</p>
+            </div>
+
+            <!-- API key now stored in Netlify environment variables -->
+        </div>
+
+        <div id="dataLoaded" class="hidden">
+            <div class="swing-score" id="swingScoreContainer">
+                <div class="swing-score-label">AI SWING SCORE</div>
+                <div class="swing-score-main">
+                    <div class="swing-score-value" id="swingScore">--</div>
+                    <div class="swing-score-delta" id="swingScoreDelta" style="display: none;"></div>
+                </div>
+                <div class="swing-score-desc" id="swingScoreDesc">Upload data to analyze</div>
+                <div class="swing-score-tooltip" id="swingScoreTooltip"></div>
+            </div>
+            
+            <div class="score-history-section">
+                <div class="score-history-title">Score Improvement</div>
+                <div class="score-history-chart-container">
+                    <canvas id="scoreHistoryChart"></canvas>
+                </div>
+            </div>
+
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <div class="stat-label">Total Shots</div>
+                    <div class="stat-value" id="totalShots">0</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-label">Avg Carry Distance</div>
+                    <div class="stat-value" id="avgCarry">0 yds</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-label">Best Shot</div>
+                    <div class="stat-value" id="bestShot">0 yds</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-label">Consistency</div>
+                    <div class="stat-value" id="consistency">0%</div>
+                </div>
+            </div>
+
+            <!-- Quick Links -->
+            <div style="margin-bottom: 16px; font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-secondary);">Quick Access</div>
+            <div class="quick-links" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 20px; margin-bottom: 40px;">
+                <a href="/charts" class="quick-link-card">
+                    <h3>📊 View Charts</h3>
+                    <p>14 detailed performance charts</p>
+                </a>
+                <a href="/analysis" class="quick-link-card">
+                    <h3>🎯 Analysis</h3>
+                    <p>AI-powered insights & recommendations</p>
+                </a>
+                <a href="/training" class="quick-link-card">
+                    <h3>🏋️ Training</h3>
+                    <p>Personalized practice drills</p>
+                </a>
+                <a href="/data" class="quick-link-card">
+                    <h3>📝 Data Table</h3>
+                    <p>Edit & manage your shots</p>
+                </a>
+            </div>
+        </div>
+    </div>
+
+    </div>
+
+    <script defer src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script defer src="supabase-client.js"></script>
+    <script defer src="sync-service.js"></script>
+    <script defer src="analysis.js"></script>
+    <script defer src="sessions.js"></script>
+    <script defer src="upload-session-utils.js"></script>
+    <script defer src="app.js"></script>
+    <script defer src="auth.js"></script>
+    <script defer src="animations.js"></script>
+    <script>
+    window.addEventListener('load', () => {
+        const currentData = localStorage.getItem('currentGolfData');
+        if (currentData && currentData !== '[]') {
+            const golfData = JSON.parse(currentData);
+            if (golfData && golfData.length > 0) {
+                document.getElementById('dataLoaded').classList.remove('hidden');
+                if (window.displayData) window.displayData();
+            }
+        }
+    });
+    </script>
+</body>
+</html>

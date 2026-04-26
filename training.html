@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <title>Training - Golf Analytics</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600;9..144,700&family=Sora:wght@400;500;600;700;800&display=swap">
+    <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="styles-auth.css">
+    <link rel="stylesheet" href="styles-table.css">
+    <link rel="stylesheet" href="netlify-identity.css">
+    <script defer src="https://identity.netlify.com/v1/netlify-identity-widget.js"></script>
+</head>
+<body>
+    <!-- Auth Section -->
+    <div id="auth-section" class="auth-section hidden">
+        <div class="auth-card">
+            <h2>Golf Launch Monitor</h2>
+            <p>Sign in to view your training plan</p>
+            <button id="login-btn" class="primary-button">Sign In / Sign Up</button>
+        </div>
+    </div>
+
+    <!-- App Section -->
+    <div id="app-section">
+        <button class="sessions-toggle" id="sessionsToggle">
+            <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M3 12h18M3 6h18M3 18h18"/>
+            </svg>
+            Sessions
+        </button>
+
+        <div class="sessions-overlay" id="sessionsOverlay"></div>
+        <div class="sessions-panel" id="sessionsPanel">
+            <div class="sessions-panel-header">
+                <div class="sessions-panel-title">Session History</div>
+                <button class="sessions-panel-close" id="sessionsPanelClose">&times;</button>
+                <button class="new-session-btn" id="saveSessionBtn">Save Current Session</button>
+            </div>
+            <div class="sessions-list" id="sessionsList">
+                <div style="text-align: center; color: var(--text-secondary); padding: 40px 20px;">
+                    No sessions saved yet
+                </div>
+            </div>
+        </div>
+
+        <div class="container">
+            <header>
+                <div class="header-top-row">
+                    <div>
+                        <h1>Training Recommendations</h1>
+                        <p class="subtitle">Personalized Practice Drills</p>
+                    </div>
+                    <div class="user-bar">
+                        <span id="user-email"></span>
+                        <button id="logout-btn" class="secondary-button">Logout</button>
+                    </div>
+                </div>
+                <nav class="main-nav">
+                    <a href="/upload" class="nav-link">Add Shots</a>
+                    <a href="/progress" class="nav-link">Trends</a>
+                    <a href="/charts" class="nav-link">Shot Charts</a>
+                    <a href="/analysis" class="nav-link">Coach Notes</a>
+                    <a href="/training" class="nav-link active">Drills</a>
+                    <a href="/data" class="nav-link">Shot Editor</a>
+                    <a href="/settings" class="nav-link">Profile</a>
+                    <a href="/admin" class="nav-link" id="admin-link" style="display: none;">Admin</a>
+                </nav>
+            </header>
+
+            <div id="dataLoaded" class="hidden">
+                <div class="drills-section">
+                    <h2>Recommended Training Drills</h2>
+                    <div id="drills" class="drills-content">
+                        <div class="drill-card">
+                            <h4>Alignment Stick Drill</h4>
+                            <p>Place alignment sticks to improve path consistency</p>
+                        </div>
+                        <div class="drill-card">
+                            <h4>Towel Drill</h4>
+                            <p>Place towel 6" behind ball to eliminate fat shots</p>
+                        </div>
+                        <div class="drill-card">
+                            <h4>Impact Bag Work</h4>
+                            <p>Improve contact and compression at impact</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div id="noData" class="upload-section">
+                <div class="upload-card">
+                    <h2>No Data Available</h2>
+                    <p>Go to the <a href="/upload" style="color: var(--primary);">Add Shots</a> page to upload your CSV data.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script defer src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script defer src="supabase-client.js"></script>
+    <script defer src="sync-service.js"></script>
+    <script defer src="analysis.js"></script>
+    <script defer src="sessions.js"></script>
+    <script defer src="app.js"></script>
+    <script defer src="auth.js"></script>
+    <script defer src="animations.js"></script>
+    <script>
+        window.addEventListener('load', async () => {
+            const savedData = localStorage.getItem('currentGolfData');
+            if (savedData && savedData !== '[]') {
+                golfData = JSON.parse(savedData);
+                document.getElementById('dataLoaded').classList.remove('hidden');
+                document.getElementById('noData').style.display = 'none';
+                
+                // Generate training drills
+                const insights = analyzeGolfData(golfData);
+                await updateDrills(insights, { aiFirst: true });
+            } else {
+                document.getElementById('dataLoaded').style.display = 'none';
+                document.getElementById('noData').classList.remove('hidden');
+            }
+        });
+    </script>
+    
+</body>
+</html>

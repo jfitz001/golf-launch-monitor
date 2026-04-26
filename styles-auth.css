@@ -1,0 +1,242 @@
+/* Prevent auth flash - hide everything until JS decides what to show */
+#auth-section,
+#app-section {
+    opacity: 0;
+    transition: opacity 0.2s ease;
+}
+
+#auth-section.ready,
+#app-section.ready {
+    opacity: 1;
+}
+
+/* Auth section styles */
+.auth-section {
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+    background:
+        radial-gradient(ellipse at 20% 10%, rgba(196,154,58,0.15) 0%, transparent 50%),
+        radial-gradient(ellipse at 80% 90%, rgba(39,183,118,0.12) 0%, transparent 50%);
+}
+
+.auth-card {
+    background: var(--surface);
+    border-radius: 24px;
+    padding: 48px;
+    max-width: 460px;
+    width: 100%;
+    text-align: center;
+    box-shadow: 0 24px 60px -20px rgba(8,50,37,0.5), 0 8px 24px rgba(0,0,0,0.08);
+    border: 1px solid rgba(255,255,255,0.8);
+    position: relative;
+    overflow: hidden;
+}
+
+.auth-card::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 4px;
+    background: linear-gradient(90deg, #0f4b38, #27b776, #c49a3a);
+    border-radius: 24px 24px 0 0;
+}
+
+.auth-card h2::before {
+    content: '⛳';
+    display: block;
+    font-size: 40px;
+    margin-bottom: 12px;
+    line-height: 1;
+    -webkit-text-fill-color: initial;
+}
+
+.auth-card h2 {
+    font-size: 32px;
+    margin-bottom: 16px;
+    font-family: 'Fraunces', Georgia, serif;
+    background: linear-gradient(135deg, var(--gradient-start), var(--gradient-end));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+}
+
+.auth-card p {
+    color: var(--text-secondary);
+    margin-bottom: 32px;
+    font-size: 16px;
+}
+
+.primary-button {
+    background: linear-gradient(135deg, var(--gradient-start), var(--primary-light));
+    color: white;
+    border: none;
+    padding: 16px 32px;
+    border-radius: 12px;
+    font-size: 16px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: transform 0.2s, box-shadow 0.2s;
+    width: 100%;
+    box-shadow: 0 8px 24px -8px rgba(15,75,56,0.5);
+    letter-spacing: 0.02em;
+}
+
+.primary-button.is-disabled,
+.primary-button:disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
+    transform: none !important;
+    box-shadow: none !important;
+}
+
+.invite-gate {
+    margin-bottom: 18px;
+    text-align: left;
+}
+
+.invite-label {
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--text-secondary);
+    font-weight: 700;
+    display: block;
+    margin-bottom: 8px;
+}
+
+.invite-row {
+    display: flex;
+    gap: 8px;
+}
+
+.invite-input {
+    flex: 1;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 12px;
+    font-size: 14px;
+    color: var(--text);
+    background: var(--surface);
+}
+
+.invite-input:focus {
+    outline: none;
+    border-color: var(--primary);
+    box-shadow: 0 0 0 2px rgba(15, 75, 56, 0.12);
+}
+
+.invite-unlock-btn {
+    border: none;
+    background: var(--primary);
+    color: white;
+    border-radius: 10px;
+    padding: 0 16px;
+    font-size: 14px;
+    font-weight: 700;
+    cursor: pointer;
+}
+
+.invite-status {
+    margin-top: 8px;
+    font-size: 12px;
+    color: var(--text-secondary);
+}
+
+.invite-status.error {
+    color: var(--danger);
+}
+
+@media (hover: hover) {
+    .primary-button:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 8px 20px rgba(16, 185, 129, 0.3);
+    }
+}
+
+.primary-button:active {
+    transform: scale(0.98);
+}
+
+.secondary-button {
+    background: var(--surface-light);
+    color: var(--text);
+    border: 1px solid var(--border);
+    padding: 8px 16px;
+    border-radius: 8px;
+    font-size: 14px;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+@media (hover: hover) {
+    .secondary-button:hover {
+        background: var(--surface);
+        border-color: var(--primary);
+    }
+}
+
+.secondary-button:active {
+    transform: scale(0.95);
+}
+
+.user-bar {
+    display: flex;
+    align-items: center;
+}
+
+/* Mobile auth styles */
+@media (max-width: 768px) {
+    .auth-section {
+        padding: 16px;
+    }
+
+    .auth-card {
+        padding: 32px 20px;
+    }
+
+    .invite-row {
+        flex-direction: column;
+    }
+
+    .invite-unlock-btn {
+        height: 42px;
+    }
+
+    .auth-card h2 {
+        font-size: 24px;
+    }
+
+    .auth-card p {
+        font-size: 14px;
+        margin-bottom: 24px;
+    }
+
+    .primary-button {
+        font-size: 14px;
+        padding: 14px 28px;
+    }
+
+    .secondary-button {
+        font-size: 13px;
+        padding: 6px 12px;
+    }
+}
+
+@media (max-width: 375px) {
+    .auth-card {
+        padding: 24px 16px;
+    }
+
+    .auth-card h2 {
+        font-size: 20px;
+    }
+
+    .auth-card p {
+        font-size: 13px;
+    }
+}

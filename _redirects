@@ -1,0 +1,13 @@
+# Clean URLs - remove .html extension
+/upload           /index.html         200
+/charts           /charts.html        200
+/analysis         /analysis.html      200
+/training         /training.html      200
+/progress         /overview.html      200
+/data             /data-table.html    200
+/admin            /admin.html         200
+/settings         /settings.html      200
+/favicon.ico      /favicon.svg        200
+
+# Fallback for any other paths
+/*                /index.html         404
