@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Charts - Golf Analytics</title>
+    <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="styles-auth.css">
+    <link rel="stylesheet" href="styles-table.css">
+    <link rel="stylesheet" href="netlify-identity.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <script type="text/javascript" src="https://identity.netlify.com/v1/netlify-identity-widget.js"></script>
+</head>
+<body>
+    <!-- Auth Section -->
+    <div id="auth-section" class="auth-section hidden">
+        <div class="auth-card">
+            <h2>Golf Launch Monitor</h2>
+            <p>Sign in to view your analytics</p>
+            <button id="login-btn" class="primary-button">Sign In / Sign Up</button>
+        </div>
+    </div>
+
+    <!-- App Section -->
+    <div id="app-section">
+        <button class="sessions-toggle" id="sessionsToggle">
+            <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M3 12h18M3 6h18M3 18h18"/>
+            </svg>
+            Sessions
+        </button>
+
+        <div class="sessions-panel" id="sessionsPanel">
+            <div class="sessions-panel-header">
+                <div class="sessions-panel-title">Session History</div>
+                <button class="sessions-panel-close" id="sessionsPanelClose">&times;</button>
+                <button class="new-session-btn" id="saveSessionBtn">Save Current Session</button>
+            </div>
+            <div class="sessions-list" id="sessionsList">
+                <div style="text-align: center; color: var(--text-secondary); padding: 40px 20px;">
+                    No sessions saved yet
+                </div>
+            </div>
+        </div>
+
+        <div class="container">
+            <header>
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                    <div>
+                        <h1>Performance Charts</h1>
+                        <p class="subtitle">Visual Analytics & Trends</p>
+                    </div>
+                    <div class="user-bar">
+                        <span id="user-email" style="margin-right: 16px; color: var(--text-secondary);"></span>
+                        <button id="logout-btn" class="secondary-button">Logout</button>
+                    </div>
+                </div>
+                <nav style="margin-top: 20px;">
+                    <a href="index.html" class="nav-link">Overview</a>
+                    <a href="charts.html" class="nav-link active">Charts</a>
+                    <a href="analysis.html" class="nav-link">Analysis</a>
+                    <a href="training.html" class="nav-link">Training</a>
+                    <a href="data-table.html" class="nav-link">Data Table</a>
+                    <a href="admin.html" class="nav-link" id="admin-link" style="display: none;">Admin</a>
+                </nav>
+            </header>
+
+            <div id="dataLoaded" class="hidden">
+                <div class="charts-grid">
+                    <div class="chart-card dispersion-chart">
+                        <h3>Shot Dispersion (Driving Range View)</h3>
+                        <canvas id="dispersionChart"></canvas>
+                    </div>
+                    <div class="chart-card">
+                        <h3>Distance vs Optimal</h3>
+                        <canvas id="distanceChart"></canvas>
+                    </div>
+                    <div class="chart-card">
+                        <h3>Launch Conditions vs Tour Pro</h3>
+                        <canvas id="launchChart"></canvas>
+                    </div>
+                    <div class="chart-card">
+                        <h3>Spin vs Skill Level</h3>
+                        <canvas id="spinChart"></canvas>
+                    </div>
+                    <div class="chart-card">
+                        <h3>Club Path Accuracy (Circular Zone)</h3>
+                        <canvas id="pathChart"></canvas>
+                    </div>
+                    <div class="chart-card">
+                        <h3>Smash Factor Distribution</h3>
+                        <canvas id="smashChart"></canvas>
+                    </div>
+                    <div class="chart-card">
+                        <h3>Attack Angle Consistency</h3>
+                        <canvas id="attackChart"></canvas>
+                    </div>
+                    <div class="chart-card">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+                            <h3 style="margin: 0;">Shot Consistency Timeline</h3>
+                            <select id="club-filter" style="background: var(--surface-light); color: var(--text); border: 1px solid var(--border); border-radius: 8px; padding: 8px 16px; font-size: 14px; cursor: pointer;">
+                                <option value="">All Clubs</option>
+                            </select>
+                        </div>
+                        <canvas id="consistencyChart"></canvas>
+                    </div>
+                    <div class="chart-card">
+                        <h3>Ball Speed Efficiency</h3>
+                        <canvas id="ballSpeedChart"></canvas>
+                    </div>
+                    <div class="chart-card">
+                        <h3>Carry vs Total Distance</h3>
+                        <canvas id="carryTotalChart"></canvas>
+                    </div>
+                    <div class="chart-card">
+                        <h3>Dynamic Loft Analysis</h3>
+                        <canvas id="loftChart"></canvas>
+                    </div>
+                    <div class="chart-card">
+                        <h3>Launch Direction Pattern</h3>
+                        <canvas id="directionChart"></canvas>
+                    </div>
+                    <div class="chart-card">
+                        <h3>Apex Height Distribution</h3>
+                        <canvas id="apexChart"></canvas>
+                    </div>
+                    <div class="chart-card">
+                        <h3>Distance Gapping by Club</h3>
+                        <canvas id="gappingChart"></canvas>
+                    </div>
+                </div>
+            </div>
+
+            <div id="noData" class="upload-section">
+                <div class="upload-card">
+                    <h2>No Data Available</h2>
+                    <p>Go to the <a href="index.html" style="color: var(--primary);">Overview</a> page to upload your CSV data.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="analysis.js"></script>
+    <script src="sessions.js"></script>
+    <script src="app.js"></script>
+    <script src="auth.js"></script>
+    <script>
+        // Check if data exists
+        window.addEventListener('load', () => {
+            const savedData = localStorage.getItem('currentGolfData');
+            if (savedData && savedData !== '[]') {
+                golfData = JSON.parse(savedData);
+                document.getElementById('dataLoaded').classList.remove('hidden');
+                document.getElementById('noData').style.display = 'none';
+                
+                // Create all charts
+                createDispersionChart();
+                createDistanceChart();
+                createLaunchChart();
+                createSpinChart();
+                createPathChart();
+                createSmashChart();
+                createAttackChart();
+                createConsistencyChart();
+                createBallSpeedChart();
+                createCarryTotalChart();
+                createLoftChart();
+                createDirectionChart();
+                createApexChart();
+                createGappingChart();
+            } else {
+                document.getElementById('dataLoaded').style.display = 'none';
+                document.getElementById('noData').classList.remove('hidden');
+            }
+        });
+    </script>
+</body>
+</html>

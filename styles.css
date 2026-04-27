@@ -546,6 +546,33 @@ header h1 {
     display: none;
 }
 
+.quick-link-card {
+    background: var(--surface);
+    border-radius: 12px;
+    padding: 24px;
+    text-decoration: none;
+    transition: all 0.2s ease;
+    border: 2px solid var(--border);
+}
+
+.quick-link-card:hover {
+    transform: translateY(-4px);
+    border-color: var(--primary);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+}
+
+.quick-link-card h3 {
+    font-size: 18px;
+    margin-bottom: 8px;
+    color: var(--text);
+}
+
+.quick-link-card p {
+    font-size: 14px;
+    color: var(--text-secondary);
+    margin: 0;
+}
+
 /* Tablet (iPad) */
 @media (max-width: 1024px) and (min-width: 769px) {
     .container {
