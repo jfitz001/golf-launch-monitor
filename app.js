@@ -211,15 +211,19 @@ function createDispersionChart() {
                 tooltip: {
                     callbacks: {
                         label: (ctx) => {
-                            if (ctx.dataset.label === 'Your Shots') {
+                            if (['On Green', 'Missed Green'].includes(ctx.dataset.label)) {
                                 const deviation = ctx.parsed.x;
+                                const distance = ctx.parsed.y;
                                 const direction = deviation > 0 ? 'right' : deviation < 0 ? 'left' : 'center';
+                                const distToPin = Math.sqrt(Math.pow(deviation, 2) + Math.pow(distance - avgDist, 2));
                                 return [
-                                    `Distance: ${ctx.parsed.y.toFixed(1)} yds`,
-                                    `Deviation: ${Math.abs(deviation).toFixed(1)} yds ${direction}`
+                                    `${ctx.dataset.label}`,
+                                    `Carry: ${distance.toFixed(1)} yds`,
+                                    `${Math.abs(deviation).toFixed(1)} yds ${direction}`,
+                                    `${distToPin.toFixed(1)} yds from hole`
                                 ];
-                            } else if (ctx.dataset.label === 'Pin') {
-                                return 'Target';
+                            } else if (ctx.dataset.label === 'Hole') {
+                                return 'Target Hole';
                             }
                             return '';
                         }
