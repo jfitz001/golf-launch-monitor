@@ -1110,7 +1110,7 @@ function createAttackChart() {
     });
 }
 
-function createConsistencyChart() {
+function createConsistencyChart(selectedClub = null) {
     const ctx = document.getElementById('consistencyChart').getContext('2d');
     
     // Group shots by club
@@ -1124,20 +1124,41 @@ function createConsistencyChart() {
         });
     });
     
-    // Find the club with the most shots
-    let mainClub = 'Unknown';
-    let maxShots = 0;
-    Object.entries(clubGroups).forEach(([club, shots]) => {
-        if (shots.length > maxShots) {
-            maxShots = shots.length;
-            mainClub = club;
-        }
-    });
+    // Populate club filter dropdown (only on first call)
+    const clubFilter = document.getElementById('club-filter');
+    if (clubFilter.options.length === 1) { // Only "All Clubs" option
+        Object.keys(clubGroups).sort().forEach(club => {
+            const option = document.createElement('option');
+            option.value = club;
+            option.textContent = `${club} (${clubGroups[club].length} shots)`;
+            clubFilter.appendChild(option);
+        });
+        
+        // Add change event listener
+        clubFilter.addEventListener('change', (e) => {
+            createConsistencyChart(e.target.value || null);
+        });
+    }
     
-    // Use only the main club's data
-    const clubData = clubGroups[mainClub];
-    const distances = clubData.map(s => s.distance);
-    const avgDistance = distances.reduce((a, b) => a + b, 0) / distances.length;
+    // Determine which club to display
+    let mainClub, clubData, distances;
+    
+    if (selectedClub) {
+        // Use selected club
+        mainClub = selectedClub;
+        clubData = clubGroups[mainClub] || [];
+        distances = clubData.map(s => s.distance);
+    } else {
+        // Use all shots combined
+        mainClub = 'All Clubs';
+        clubData = golfData.map((shot, index) => ({
+            index,
+            distance: parseFloat(shot['Carry Distance']) || 0
+        }));
+        distances = clubData.map(s => s.distance);
+    }
+    
+    const avgDistance = distances.length > 0 ? distances.reduce((a, b) => a + b, 0) / distances.length : 0;
     
     if (charts.consistency) charts.consistency.destroy();
     
@@ -1156,7 +1177,7 @@ function createConsistencyChart() {
             labels: distances.map((_, i) => `${i + 1}`),
             datasets: [
                 {
-                    label: `${mainClub} Shot Distance`,
+                    label: 'Shot Distance',
                     data: distances,
                     borderColor: 'rgba(124, 58, 237, 0.6)',
                     backgroundColor: 'rgba(124, 58, 237, 0.1)',
@@ -1189,9 +1210,9 @@ function createConsistencyChart() {
                 legend: { labels: { color: '#f1f5f9' } },
                 title: {
                     display: true,
-                    text: `${mainClub} Consistency (${distances.length} shots)`,
-                    color: '#f1f5f9',
-                    font: { size: 14 }
+                    text: `${distances.length} shot${distances.length !== 1 ? 's' : ''}`,
+                    color: '#94a3b8',
+                    font: { size: 12 }
                 }
             },
             scales: {
@@ -1201,7 +1222,7 @@ function createConsistencyChart() {
                     ticks: { color: '#94a3b8' }
                 },
                 x: {
-                    title: { display: true, text: 'Shot Number (this club only)', color: '#94a3b8' },
+                    title: { display: true, text: 'Shot Number', color: '#94a3b8' },
                     grid: { color: 'rgba(71, 85, 105, 0.3)' },
                     ticks: { 
                         color: '#94a3b8',
