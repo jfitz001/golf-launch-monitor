@@ -576,12 +576,10 @@ document.getElementById('saveKey').addEventListener('click', () => {
     }
 });
 
-// Load saved key from localStorage or use default from .env
-const defaultKey = 'AIzaSyDI5n_U1jOqUmlZnkEAq95SJY1CWxhjHx8'; // Default API key
-const savedKey = localStorage.getItem('geminiApiKey') || defaultKey;
+// Load saved key from localStorage only (no hardcoded default)
+const savedKey = localStorage.getItem('geminiApiKey');
 if (savedKey) {
     document.getElementById('geminiKey').value = savedKey;
-    localStorage.setItem('geminiApiKey', savedKey); // Store default if not set
 }
 
 // Display automatic insights (no API needed)
