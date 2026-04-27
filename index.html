@@ -5,9 +5,22 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Garmin R10 Golf Analytics</title>
     <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="styles-auth.css">
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <script type="text/javascript" src="https://identity.netlify.com/v1/netlify-identity-widget.js"></script>
 </head>
 <body>
+    <!-- Auth Section -->
+    <div id="auth-section" class="auth-section hidden">
+        <div class="auth-card">
+            <h2>Golf Launch Monitor</h2>
+            <p>Sign in to save your data and access from anywhere</p>
+            <button id="login-btn" class="primary-button">Sign In / Sign Up</button>
+        </div>
+    </div>
+
+    <!-- App Section (shown after login) -->
+    <div id="app-section">
     <button class="sessions-toggle" id="sessionsToggle">
         <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
             <path d="M3 12h18M3 6h18M3 18h18"/>
@@ -30,8 +43,16 @@
 
     <div class="container">
         <header>
-            <h1>Golf Launch Monitor</h1>
-            <p class="subtitle">Professional Swing Analytics</p>
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+                <div>
+                    <h1>Golf Launch Monitor</h1>
+                    <p class="subtitle">Professional Swing Analytics</p>
+                </div>
+                <div class="user-bar">
+                    <span id="user-email" style="margin-right: 16px; color: var(--text-secondary);"></span>
+                    <button id="logout-btn" class="secondary-button">Logout</button>
+                </div>
+            </div>
         </header>
 
         <div class="upload-section">
@@ -143,8 +164,11 @@
         </div>
     </div>
 
+    </div>
+
     <script src="analysis.js"></script>
     <script src="sessions.js"></script>
     <script src="app.js"></script>
+    <script src="auth.js"></script>
 </body>
 </html>

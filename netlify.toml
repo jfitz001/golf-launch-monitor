@@ -1,0 +1,16 @@
+[[headers]]
+  for = "/*"
+  [headers.values]
+    Access-Control-Allow-Origin = "*"
+
+[build]
+  publish = "."
+
+[[redirects]]
+  from = "/api/*"
+  to = "/.netlify/functions/:splat"
+  status = 200
+
+# Enable Netlify Identity
+[build.environment]
+  NETLIFY_USE_IDENTITY = "true"
