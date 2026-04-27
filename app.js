@@ -111,56 +111,58 @@ function createDispersionChart() {
     
     if (charts.dispersion) charts.dispersion.destroy();
     
-    // Create gradient for fairway/rough
-    const gradient = ctx.createLinearGradient(0, 0, 0, 400);
-    gradient.addColorStop(0, 'rgba(34, 139, 34, 0.15)');   // Green at target
-    gradient.addColorStop(0.7, 'rgba(34, 139, 34, 0.08)'); // Lighter green
-    gradient.addColorStop(1, 'rgba(139, 69, 19, 0.08)');   // Brown at tee
+    // Standard green dimensions: 30 yards deep x 40 yards wide (typical)
+    const greenWidth = 20; // Half-width for left/right (±20 yards)
+    const greenDepth = 30; // Total depth front to back
+    const greenFront = avgDist - 10; // Green starts 10 yards before average
+    const greenBack = avgDist + 20;  // Green ends 20 yards after average
     
     charts.dispersion = new Chart(ctx, {
         type: 'scatter',
         data: {
             datasets: [
+                // Background (fairway/rough)
                 {
-                    label: 'Fairway',
+                    label: 'Fairway/Rough',
                     data: [
-                        { x: -10, y: 0 },
-                        { x: 10, y: 0 },
-                        { x: 10, y: maxDist + 10 },
-                        { x: -10, y: maxDist + 10 },
-                        { x: -10, y: 0 }
+                        { x: -30, y: minDist - 20 },
+                        { x: 30, y: minDist - 20 },
+                        { x: 30, y: maxDist + 20 },
+                        { x: -30, y: maxDist + 20 }
                     ],
-                    borderColor: 'rgba(34, 139, 34, 0.3)',
-                    backgroundColor: 'rgba(34, 139, 34, 0.08)',
-                    borderWidth: 2,
+                    borderColor: 'rgba(107, 142, 35, 0.3)',
+                    backgroundColor: 'rgba(107, 142, 35, 0.1)',
+                    borderWidth: 1,
+                    pointRadius: 0,
+                    fill: true,
+                    type: 'line',
+                    showLine: true,
+                    order: 5
+                },
+                // Golf Green (bentgrass color)
+                {
+                    label: 'Green',
+                    data: [
+                        { x: -greenWidth, y: greenFront },
+                        { x: greenWidth, y: greenFront },
+                        { x: greenWidth, y: greenBack },
+                        { x: -greenWidth, y: greenBack },
+                        { x: -greenWidth, y: greenFront }
+                    ],
+                    borderColor: 'rgba(34, 139, 34, 0.8)',
+                    backgroundColor: 'rgba(60, 179, 113, 0.35)', // Medium sea green
+                    borderWidth: 3,
                     pointRadius: 0,
                     fill: true,
                     type: 'line',
                     showLine: true,
                     order: 3
                 },
+                // Hole/Cup
                 {
-                    label: 'Green',
-                    data: [
-                        { x: -8, y: avgDist - 5 },
-                        { x: 8, y: avgDist - 5 },
-                        { x: 8, y: avgDist + 15 },
-                        { x: -8, y: avgDist + 15 },
-                        { x: -8, y: avgDist - 5 }
-                    ],
-                    borderColor: 'rgba(0, 128, 0, 0.6)',
-                    backgroundColor: 'rgba(0, 128, 0, 0.15)',
-                    borderWidth: 2,
-                    pointRadius: 0,
-                    fill: true,
-                    type: 'line',
-                    showLine: true,
-                    order: 2
-                },
-                {
-                    label: 'Pin',
+                    label: 'Hole',
                     data: [{ x: 0, y: avgDist }],
-                    backgroundColor: 'rgba(255, 215, 0, 1)',
+                    backgroundColor: 'rgba(0, 0, 0, 1)',
                     borderColor: 'rgba(255, 215, 0, 1)',
                     pointRadius: 8,
                     pointStyle: 'triangle',
@@ -194,8 +196,17 @@ function createDispersionChart() {
                 legend: { 
                     labels: { 
                         color: '#f1f5f9',
-                        filter: (item) => !['Fairway', 'Green', 'Target Line'].includes(item.text)
+                        filter: (item) => ['On Green', 'Missed Green'].includes(item.text)
                     } 
+                },
+                title: {
+                    display: true,
+                    text: `Green in Regulation: ${Math.round((carryDistances.filter((dist, i) => {
+                        const dev = deviations[i];
+                        return Math.abs(dev) <= greenWidth && dist >= greenFront && dist <= greenBack;
+                    }).length / carryDistances.length) * 100)}%`,
+                    color: '#10b981',
+                    font: { size: 14, weight: 'bold' }
                 },
                 tooltip: {
                     callbacks: {
