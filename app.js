@@ -1,6 +1,15 @@
 let golfData = [];
 let charts = {};
 
+// Check if user is admin and show admin link
+window.addEventListener('load', () => {
+    const user = netlifyIdentity?.currentUser();
+    if (user && user.email === 'jamiefitzgerald001@gmail.com') {
+        const adminLink = document.getElementById('admin-link');
+        if (adminLink) adminLink.style.display = 'inline-block';
+    }
+});
+
 // CSV Upload Handler
 document.getElementById('csvFile').addEventListener('change', handleFileUpload);
 
@@ -64,6 +73,10 @@ function parseCSV(text) {
         console.log('First shot data:', golfData[0]);
         console.log('Available columns:', Object.keys(golfData[0]));
     }
+    
+    // Save data to localStorage for data table page
+    localStorage.setItem('currentGolfData', JSON.stringify(golfData));
+    localStorage.setItem('golfData', JSON.stringify(golfData));
     
     displayData();
 }

@@ -6,6 +6,7 @@
     <title>Garmin R10 Golf Analytics</title>
     <link rel="stylesheet" href="styles.css">
     <link rel="stylesheet" href="styles-auth.css">
+    <link rel="stylesheet" href="styles-table.css">
     <link rel="stylesheet" href="netlify-identity.css">
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
     <script type="text/javascript" src="https://identity.netlify.com/v1/netlify-identity-widget.js"></script>
@@ -54,6 +55,11 @@
                     <button id="logout-btn" class="secondary-button">Logout</button>
                 </div>
             </div>
+            <nav style="margin-top: 20px;">
+                <a href="index.html" class="nav-link active">Dashboard</a>
+                <a href="data-table.html" class="nav-link">Data Table</a>
+                <a href="admin.html" class="nav-link" id="admin-link" style="display: none;">Admin</a>
+            </nav>
         </header>
 
         <div class="upload-section">

@@ -1,0 +1,190 @@
+/* Data Table Styles */
+.nav-link {
+    display: inline-block;
+    padding: 8px 16px;
+    margin-right: 12px;
+    color: var(--text-secondary);
+    text-decoration: none;
+    border-radius: 8px;
+    transition: all 0.2s;
+    font-size: 14px;
+}
+
+.nav-link:hover {
+    color: var(--text);
+    background: var(--surface-light);
+}
+
+.nav-link.active {
+    color: white;
+    background: linear-gradient(135deg, var(--gradient-start), var(--gradient-end));
+}
+
+.table-controls {
+    display: flex;
+    gap: 12px;
+    margin-bottom: 24px;
+    flex-wrap: wrap;
+}
+
+.danger-button {
+    background: #ef4444;
+    color: white;
+    border: none;
+    padding: 12px 24px;
+    border-radius: 8px;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.danger-button:hover {
+    background: #dc2626;
+    transform: translateY(-2px);
+}
+
+.table-container {
+    background: var(--surface);
+    border-radius: 12px;
+    padding: 24px;
+    overflow-x: auto;
+}
+
+.data-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 14px;
+}
+
+.data-table thead {
+    background: var(--surface-light);
+    position: sticky;
+    top: 0;
+    z-index: 10;
+}
+
+.data-table th {
+    padding: 12px;
+    text-align: left;
+    font-weight: 600;
+    color: var(--text);
+    border-bottom: 2px solid var(--border);
+    white-space: nowrap;
+}
+
+.data-table td {
+    padding: 12px;
+    border-bottom: 1px solid var(--border);
+    color: var(--text-secondary);
+}
+
+.data-table tbody tr {
+    transition: background 0.2s;
+}
+
+.data-table tbody tr:hover {
+    background: var(--surface-light);
+}
+
+.data-table tbody tr.selected {
+    background: rgba(16, 185, 129, 0.1);
+}
+
+.editable-cell {
+    cursor: pointer;
+    position: relative;
+}
+
+.editable-cell:hover {
+    background: rgba(16, 185, 129, 0.05);
+}
+
+.editable-cell input {
+    width: 100%;
+    padding: 6px;
+    background: var(--bg);
+    border: 1px solid var(--primary);
+    border-radius: 4px;
+    color: var(--text);
+    font-size: 14px;
+}
+
+.row-actions {
+    display: flex;
+    gap: 8px;
+}
+
+.action-btn {
+    background: none;
+    border: none;
+    color: var(--text-secondary);
+    cursor: pointer;
+    padding: 4px 8px;
+    border-radius: 4px;
+    font-size: 12px;
+    transition: all 0.2s;
+}
+
+.action-btn:hover {
+    color: var(--text);
+    background: var(--surface-light);
+}
+
+.action-btn.delete {
+    color: #ef4444;
+}
+
+.action-btn.delete:hover {
+    background: rgba(239, 68, 68, 0.1);
+}
+
+.checkbox-cell input[type="checkbox"] {
+    width: 18px;
+    height: 18px;
+    cursor: pointer;
+}
+
+.empty-state {
+    text-align: center;
+    padding: 60px 20px;
+    color: var(--text-secondary);
+}
+
+.empty-state h3 {
+    color: var(--text);
+    margin-bottom: 12px;
+}
+
+.empty-state a {
+    color: var(--primary);
+    text-decoration: none;
+}
+
+.empty-state a:hover {
+    text-decoration: underline;
+}
+
+/* Mobile responsive */
+@media (max-width: 768px) {
+    .table-container {
+        padding: 12px;
+    }
+
+    .data-table {
+        font-size: 12px;
+    }
+
+    .data-table th,
+    .data-table td {
+        padding: 8px 6px;
+    }
+
+    .table-controls {
+        flex-direction: column;
+    }
+
+    .table-controls button {
+        width: 100%;
+    }
+}

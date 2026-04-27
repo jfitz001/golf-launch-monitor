@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin Dashboard - Golf Analytics</title>
+    <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="styles-auth.css">
+    <link rel="stylesheet" href="styles-admin.css">
+    <link rel="stylesheet" href="netlify-identity.css">
+    <script type="text/javascript" src="https://identity.netlify.com/v1/netlify-identity-widget.js"></script>
+</head>
+<body>
+    <!-- Auth Section -->
+    <div id="auth-section" class="auth-section hidden">
+        <div class="auth-card">
+            <h2>Golf Launch Monitor</h2>
+            <p>Admin access required</p>
+            <button id="login-btn" class="primary-button">Sign In</button>
+        </div>
+    </div>
+
+    <!-- App Section -->
+    <div id="app-section">
+        <header>
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+                <div>
+                    <h1>Admin Dashboard</h1>
+                    <p>Manage API limits and system settings</p>
+                </div>
+                <div class="user-bar">
+                    <span id="user-email"></span>
+                    <button id="logout-btn" class="secondary-button">Logout</button>
+                </div>
+            </div>
+            <nav style="margin-top: 20px;">
+                <a href="index.html" class="nav-link">Dashboard</a>
+                <a href="data-table.html" class="nav-link">Data Table</a>
+                <a href="admin.html" class="nav-link active">Admin</a>
+            </nav>
+        </header>
+
+        <div id="admin-content" class="container" style="display: none;">
+            <!-- API Usage Stats -->
+            <div class="admin-section">
+                <h2>API Usage Statistics</h2>
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <p>Total API Calls Today</p>
+                        <h3 id="api-calls-today">0</h3>
+                    </div>
+                    <div class="stat-card">
+                        <p>Total Users</p>
+                        <h3 id="total-users">0</h3>
+                    </div>
+                    <div class="stat-card">
+                        <p>API Calls This Month</p>
+                        <h3 id="api-calls-month">0</h3>
+                    </div>
+                    <div class="stat-card">
+                        <p>Rate Limit Hits</p>
+                        <h3 id="rate-limit-hits">0</h3>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Rate Limit Controls -->
+            <div class="admin-section">
+                <h2>Rate Limit Configuration</h2>
+                <div class="config-card">
+                    <div class="config-row">
+                        <label for="requests-per-minute">Requests per Minute</label>
+                        <input type="number" id="requests-per-minute" value="10" min="1" max="100">
+                    </div>
+                    <div class="config-row">
+                        <label for="requests-per-hour">Requests per Hour</label>
+                        <input type="number" id="requests-per-hour" value="100" min="1" max="1000">
+                    </div>
+                    <div class="config-row">
+                        <label for="requests-per-day">Requests per Day</label>
+                        <input type="number" id="requests-per-day" value="500" min="1" max="10000">
+                    </div>
+                    <button id="save-rate-limits" class="primary-button">Save Rate Limits</button>
+                </div>
+            </div>
+
+            <!-- API Request Log -->
+            <div class="admin-section">
+                <h2>Recent API Requests</h2>
+                <div class="log-container">
+                    <table class="log-table">
+                        <thead>
+                            <tr>
+                                <th>Timestamp</th>
+                                <th>User</th>
+                                <th>Endpoint</th>
+                                <th>Status</th>
+                                <th>Response Time</th>
+                            </tr>
+                        </thead>
+                        <tbody id="api-log-body">
+                            <tr>
+                                <td colspan="5" class="empty-log">No recent requests</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- User Management -->
+            <div class="admin-section">
+                <h2>User Management</h2>
+                <div class="user-list">
+                    <table class="log-table">
+                        <thead>
+                            <tr>
+                                <th>Email</th>
+                                <th>Role</th>
+                                <th>Last Active</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="user-list-body">
+                            <tr>
+                                <td colspan="4" class="empty-log">Loading users...</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <div id="access-denied" class="container" style="display: none;">
+            <div class="auth-card" style="margin-top: 100px;">
+                <h2>Access Denied</h2>
+                <p>You don't have permission to access the admin dashboard.</p>
+                <a href="index.html" class="primary-button" style="display: inline-block; text-decoration: none; margin-top: 20px;">Go to Dashboard</a>
+            </div>
+        </div>
+    </div>
+
+    <script src="auth.js"></script>
+    <script src="admin.js"></script>
+</body>
+</html>
