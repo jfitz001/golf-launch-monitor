@@ -107,6 +107,12 @@ function displayData() {
     createSmashChart();
     createAttackChart();
     createConsistencyChart();
+    createBallSpeedChart();
+    createCarryTotalChart();
+    createLoftChart();
+    createDirectionChart();
+    createApexChart();
+    createGappingChart();
     
     // Run pure JS analysis
     displayAutomaticInsights();
@@ -1308,6 +1314,359 @@ function createConsistencyChart(selectedClub = null) {
                         color: '#94a3b8',
                         maxTicksLimit: 15
                     }
+                }
+            }
+        }
+    });
+}
+
+function createBallSpeedChart() {
+    const ctx = document.getElementById('ballSpeedChart').getContext('2d');
+    const ballSpeeds = golfData.map(s => parseFloat(s['Ball Speed']) || 0).filter(s => s > 0);
+    const clubSpeeds = golfData.map(s => parseFloat(s['Club Speed']) || 0).filter(s => s > 0);
+    
+    if (charts.ballSpeed) charts.ballSpeed.destroy();
+    
+    // Calculate efficiency (ball speed / club speed ratio)
+    const efficiencies = ballSpeeds.map((bs, i) => clubSpeeds[i] ? (bs / clubSpeeds[i]) : 0);
+    const avgEfficiency = efficiencies.reduce((a, b) => a + b, 0) / efficiencies.length;
+    
+    charts.ballSpeed = new Chart(ctx, {
+        type: 'scatter',
+        data: {
+            datasets: [{
+                label: 'Your Shots',
+                data: clubSpeeds.map((cs, i) => ({ x: cs, y: ballSpeeds[i] })),
+                backgroundColor: 'rgba(124, 58, 237, 0.8)',
+                borderColor: 'rgba(124, 58, 237, 1)',
+                pointRadius: 6
+            }, {
+                label: 'Ideal 1.5x Ratio',
+                data: [{ x: Math.min(...clubSpeeds), y: Math.min(...clubSpeeds) * 1.5 }, 
+                       { x: Math.max(...clubSpeeds), y: Math.max(...clubSpeeds) * 1.5 }],
+                type: 'line',
+                borderColor: 'rgba(16, 185, 129, 0.5)',
+                borderDash: [5, 5],
+                pointRadius: 0
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: true,
+            plugins: {
+                legend: { labels: { color: '#f1f5f9' } },
+                title: {
+                    display: true,
+                    text: `Avg Efficiency: ${avgEfficiency.toFixed(2)}x`,
+                    color: '#94a3b8',
+                    font: { size: 12 }
+                }
+            },
+            scales: {
+                y: {
+                    title: { display: true, text: 'Ball Speed (km/h)', color: '#94a3b8' },
+                    grid: { color: 'rgba(71, 85, 105, 0.3)' },
+                    ticks: { color: '#94a3b8' }
+                },
+                x: {
+                    title: { display: true, text: 'Club Speed (km/h)', color: '#94a3b8' },
+                    grid: { color: 'rgba(71, 85, 105, 0.3)' },
+                    ticks: { color: '#94a3b8' }
+                }
+            }
+        }
+    });
+}
+
+function createCarryTotalChart() {
+    const ctx = document.getElementById('carryTotalChart').getContext('2d');
+    const carryDist = golfData.map(s => parseFloat(s['Carry Distance']) || 0);
+    const totalDist = golfData.map(s => parseFloat(s['Total Distance']) || parseFloat(s['Carry Distance']) || 0);
+    
+    if (charts.carryTotal) charts.carryTotal.destroy();
+    
+    const rollAvg = totalDist.map((t, i) => t - carryDist[i]).reduce((a, b) => a + b, 0) / totalDist.length;
+    
+    charts.carryTotal = new Chart(ctx, {
+        type: 'scatter',
+        data: {
+            datasets: [{
+                label: 'Your Shots',
+                data: carryDist.map((c, i) => ({ x: c, y: totalDist[i] })),
+                backgroundColor: 'rgba(245, 158, 11, 0.8)',
+                borderColor: 'rgba(245, 158, 11, 1)',
+                pointRadius: 6
+            }, {
+                label: '1:1 Line (No Roll)',
+                data: [{ x: Math.min(...carryDist), y: Math.min(...carryDist) }, 
+                       { x: Math.max(...carryDist), y: Math.max(...carryDist) }],
+                type: 'line',
+                borderColor: 'rgba(148, 163, 184, 0.5)',
+                borderDash: [5, 5],
+                pointRadius: 0
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: true,
+            plugins: {
+                legend: { labels: { color: '#f1f5f9' } },
+                title: {
+                    display: true,
+                    text: `Avg Roll: ${rollAvg.toFixed(1)} yards`,
+                    color: '#94a3b8',
+                    font: { size: 12 }
+                }
+            },
+            scales: {
+                y: {
+                    title: { display: true, text: 'Total Distance (yards)', color: '#94a3b8' },
+                    grid: { color: 'rgba(71, 85, 105, 0.3)' },
+                    ticks: { color: '#94a3b8' }
+                },
+                x: {
+                    title: { display: true, text: 'Carry Distance (yards)', color: '#94a3b8' },
+                    grid: { color: 'rgba(71, 85, 105, 0.3)' },
+                    ticks: { color: '#94a3b8' }
+                }
+            }
+        }
+    });
+}
+
+function createLoftChart() {
+    const ctx = document.getElementById('loftChart').getContext('2d');
+    const launchAngles = golfData.map(s => parseFloat(s['Launch Angle']) || 0);
+    const clubSpeeds = golfData.map(s => parseFloat(s['Club Speed']) || 0);
+    
+    if (charts.loft) charts.loft.destroy();
+    
+    const avgLaunch = launchAngles.reduce((a, b) => a + b, 0) / launchAngles.length;
+    
+    charts.loft = new Chart(ctx, {
+        type: 'scatter',
+        data: {
+            datasets: [{
+                label: 'Your Shots',
+                data: clubSpeeds.map((cs, i) => ({ x: cs, y: launchAngles[i] })),
+                backgroundColor: 'rgba(236, 72, 153, 0.8)',
+                borderColor: 'rgba(236, 72, 153, 1)',
+                pointRadius: 6
+            }, {
+                label: 'Optimal Zone',
+                data: [
+                    { x: Math.min(...clubSpeeds), y: 12 },
+                    { x: Math.max(...clubSpeeds), y: 12 },
+                    { x: Math.max(...clubSpeeds), y: 18 },
+                    { x: Math.min(...clubSpeeds), y: 18 }
+                ],
+                type: 'line',
+                backgroundColor: 'rgba(16, 185, 129, 0.1)',
+                borderColor: 'rgba(16, 185, 129, 0.5)',
+                fill: true,
+                pointRadius: 0
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: true,
+            plugins: {
+                legend: { labels: { color: '#f1f5f9' } },
+                title: {
+                    display: true,
+                    text: `Avg Launch: ${avgLaunch.toFixed(1)}°`,
+                    color: '#94a3b8',
+                    font: { size: 12 }
+                }
+            },
+            scales: {
+                y: {
+                    title: { display: true, text: 'Launch Angle (degrees)', color: '#94a3b8' },
+                    grid: { color: 'rgba(71, 85, 105, 0.3)' },
+                    ticks: { color: '#94a3b8' }
+                },
+                x: {
+                    title: { display: true, text: 'Club Speed (km/h)', color: '#94a3b8' },
+                    grid: { color: 'rgba(71, 85, 105, 0.3)' },
+                    ticks: { color: '#94a3b8' }
+                }
+            }
+        }
+    });
+}
+
+function createDirectionChart() {
+    const ctx = document.getElementById('directionChart').getContext('2d');
+    const deviations = golfData.map(s => parseFloat(s['Carry Deviation Distance']) || 0);
+    const distances = golfData.map(s => parseFloat(s['Carry Distance']) || 0);
+    
+    if (charts.direction) charts.direction.destroy();
+    
+    const leftShots = deviations.filter(d => d < -2).length;
+    const rightShots = deviations.filter(d => d > 2).length;
+    const straightShots = deviations.filter(d => Math.abs(d) <= 2).length;
+    
+    charts.direction = new Chart(ctx, {
+        type: 'polarArea',
+        data: {
+            labels: ['Straight', 'Right', 'Left'],
+            datasets: [{
+                data: [straightShots, rightShots, leftShots],
+                backgroundColor: [
+                    'rgba(16, 185, 129, 0.6)',
+                    'rgba(245, 158, 11, 0.6)',
+                    'rgba(239, 68, 68, 0.6)'
+                ],
+                borderColor: [
+                    'rgba(16, 185, 129, 1)',
+                    'rgba(245, 158, 11, 1)',
+                    'rgba(239, 68, 68, 1)'
+                ],
+                borderWidth: 2
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: true,
+            plugins: {
+                legend: { labels: { color: '#f1f5f9' } },
+                title: {
+                    display: true,
+                    text: `${Math.round((straightShots / deviations.length) * 100)}% Straight`,
+                    color: '#94a3b8',
+                    font: { size: 12 }
+                }
+            },
+            scales: {
+                r: {
+                    ticks: { color: '#94a3b8', backdropColor: 'transparent' },
+                    grid: { color: 'rgba(71, 85, 105, 0.3)' }
+                }
+            }
+        }
+    });
+}
+
+function createApexChart() {
+    const ctx = document.getElementById('apexChart').getContext('2d');
+    const apexHeights = golfData.map(s => parseFloat(s['Apex']) || parseFloat(s['Max Height']) || 0).filter(h => h > 0);
+    
+    if (charts.apex) charts.apex.destroy();
+    
+    // Create histogram bins
+    const bins = [0, 10, 20, 30, 40, 50, 60];
+    const counts = new Array(bins.length - 1).fill(0);
+    
+    apexHeights.forEach(h => {
+        for (let i = 0; i < bins.length - 1; i++) {
+            if (h >= bins[i] && h < bins[i + 1]) {
+                counts[i]++;
+                break;
+            }
+        }
+    });
+    
+    const avgApex = apexHeights.reduce((a, b) => a + b, 0) / apexHeights.length;
+    
+    charts.apex = new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels: bins.slice(0, -1).map((b, i) => `${b}-${bins[i + 1]}m`),
+            datasets: [{
+                label: 'Shot Count',
+                data: counts,
+                backgroundColor: 'rgba(59, 130, 246, 0.6)',
+                borderColor: 'rgba(59, 130, 246, 1)',
+                borderWidth: 2
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: true,
+            plugins: {
+                legend: { display: false },
+                title: {
+                    display: true,
+                    text: apexHeights.length > 0 ? `Avg Apex: ${avgApex.toFixed(1)}m` : 'No apex data',
+                    color: '#94a3b8',
+                    font: { size: 12 }
+                }
+            },
+            scales: {
+                y: {
+                    title: { display: true, text: 'Number of Shots', color: '#94a3b8' },
+                    grid: { color: 'rgba(71, 85, 105, 0.3)' },
+                    ticks: { color: '#94a3b8', stepSize: 1 }
+                },
+                x: {
+                    title: { display: true, text: 'Apex Height Range', color: '#94a3b8' },
+                    grid: { color: 'rgba(71, 85, 105, 0.3)' },
+                    ticks: { color: '#94a3b8' }
+                }
+            }
+        }
+    });
+}
+
+function createGappingChart() {
+    const ctx = document.getElementById('gappingChart').getContext('2d');
+    
+    if (charts.gapping) charts.gapping.destroy();
+    
+    // Group by club and calculate average distance
+    const clubData = {};
+    golfData.forEach(shot => {
+        const club = shot['Club Type'] || shot['Club Name'] || shot['Club'] || 'Unknown';
+        const distance = parseFloat(shot['Carry Distance']) || 0;
+        
+        if (!clubData[club]) clubData[club] = [];
+        clubData[club].push(distance);
+    });
+    
+    const clubAverages = Object.entries(clubData).map(([club, distances]) => ({
+        club,
+        avg: distances.reduce((a, b) => a + b, 0) / distances.length,
+        count: distances.length
+    })).sort((a, b) => b.avg - a.avg);
+    
+    charts.gapping = new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels: clubAverages.map(c => c.club),
+            datasets: [{
+                label: 'Avg Distance',
+                data: clubAverages.map(c => c.avg),
+                backgroundColor: clubAverages.map((_, i) => 
+                    `rgba(${124 - i * 20}, ${58 + i * 30}, ${237 - i * 20}, 0.6)`
+                ),
+                borderColor: clubAverages.map((_, i) => 
+                    `rgba(${124 - i * 20}, ${58 + i * 30}, ${237 - i * 20}, 1)`
+                ),
+                borderWidth: 2
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: true,
+            plugins: {
+                legend: { display: false },
+                title: {
+                    display: true,
+                    text: `${clubAverages.length} clubs analyzed`,
+                    color: '#94a3b8',
+                    font: { size: 12 }
+                }
+            },
+            scales: {
+                y: {
+                    title: { display: true, text: 'Distance (yards)', color: '#94a3b8' },
+                    grid: { color: 'rgba(71, 85, 105, 0.3)' },
+                    ticks: { color: '#94a3b8' }
+                },
+                x: {
+                    title: { display: true, text: 'Club', color: '#94a3b8' },
+                    grid: { color: 'rgba(71, 85, 105, 0.3)' },
+                    ticks: { color: '#94a3b8' }
                 }
             }
         }
