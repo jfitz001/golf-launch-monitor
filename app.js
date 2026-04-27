@@ -133,11 +133,23 @@ function createDispersionChart() {
     
     if (charts.dispersion) charts.dispersion.destroy();
     
-    // Standard green dimensions: 30 yards deep x 40 yards wide (typical)
-    const greenWidth = 20; // Half-width for left/right (±20 yards)
-    const greenDepth = 30; // Total depth front to back
-    const greenFront = avgDist - 10; // Green starts 10 yards before average
-    const greenBack = avgDist + 20;  // Green ends 20 yards after average
+    // Circular green - typical diameter is 25-30 yards
+    const greenRadius = 15; // 15 yard radius = 30 yard diameter green
+    const greenCenterX = 0; // Centered on target line
+    const greenCenterY = avgDist; // Centered at average distance
+    
+    // Create circle points for the green
+    const createCircle = (centerX, centerY, radius, points = 60) => {
+        const circle = [];
+        for (let i = 0; i <= points; i++) {
+            const angle = (i / points) * 2 * Math.PI;
+            circle.push({
+                x: centerX + radius * Math.cos(angle),
+                y: centerY + radius * Math.sin(angle)
+            });
+        }
+        return circle;
+    };
     
     charts.dispersion = new Chart(ctx, {
         type: 'scatter',
@@ -161,16 +173,10 @@ function createDispersionChart() {
                     showLine: true,
                     order: 5
                 },
-                // Golf Green (bentgrass color)
+                // Circular Golf Green
                 {
                     label: 'Green',
-                    data: [
-                        { x: -greenWidth, y: greenFront },
-                        { x: greenWidth, y: greenFront },
-                        { x: greenWidth, y: greenBack },
-                        { x: -greenWidth, y: greenBack },
-                        { x: -greenWidth, y: greenFront }
-                    ],
+                    data: createCircle(greenCenterX, greenCenterY, greenRadius),
                     borderColor: 'rgba(34, 139, 34, 0.8)',
                     backgroundColor: 'rgba(60, 179, 113, 0.35)', // Medium sea green
                     borderWidth: 3,
@@ -190,11 +196,30 @@ function createDispersionChart() {
                     pointStyle: 'triangle',
                     order: 0
                 },
+                // Shots on green
                 {
-                    label: 'Your Shots',
-                    data: carryDistances.map((dist, i) => ({ x: deviations[i], y: dist })),
-                    backgroundColor: 'rgba(255, 255, 255, 0.9)',
-                    borderColor: 'rgba(124, 58, 237, 1)',
+                    label: 'On Green',
+                    data: carryDistances.map((dist, i) => {
+                        const dev = deviations[i];
+                        const distFromCenter = Math.sqrt(Math.pow(dev - greenCenterX, 2) + Math.pow(dist - greenCenterY, 2));
+                        return distFromCenter <= greenRadius ? { x: dev, y: dist } : null;
+                    }).filter(d => d !== null),
+                    backgroundColor: 'rgba(16, 185, 129, 0.9)',
+                    borderColor: 'rgba(16, 185, 129, 1)',
+                    borderWidth: 2,
+                    pointRadius: 6,
+                    order: 1
+                },
+                // Shots missed green
+                {
+                    label: 'Missed Green',
+                    data: carryDistances.map((dist, i) => {
+                        const dev = deviations[i];
+                        const distFromCenter = Math.sqrt(Math.pow(dev - greenCenterX, 2) + Math.pow(dist - greenCenterY, 2));
+                        return distFromCenter > greenRadius ? { x: dev, y: dist } : null;
+                    }).filter(d => d !== null),
+                    backgroundColor: 'rgba(239, 68, 68, 0.9)',
+                    borderColor: 'rgba(239, 68, 68, 1)',
                     borderWidth: 2,
                     pointRadius: 6,
                     order: 1
@@ -225,7 +250,9 @@ function createDispersionChart() {
                     display: true,
                     text: `Green in Regulation: ${Math.round((carryDistances.filter((dist, i) => {
                         const dev = deviations[i];
-                        return Math.abs(dev) <= greenWidth && dist >= greenFront && dist <= greenBack;
+                        // Check if shot is within circular green (distance from center <= radius)
+                        const distFromCenter = Math.sqrt(Math.pow(dev - greenCenterX, 2) + Math.pow(dist - greenCenterY, 2));
+                        return distFromCenter <= greenRadius;
                     }).length / carryDistances.length) * 100)}%`,
                     color: '#10b981',
                     font: { size: 14, weight: 'bold' }
