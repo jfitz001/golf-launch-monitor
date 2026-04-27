@@ -42,7 +42,10 @@ function processFile(file) {
 
 function parseCSV(text) {
     const lines = text.split('\n');
-    const headers = lines[0].split(',');
+    const headers = lines[0].split(',').map(h => h.trim());
+    
+    // Log headers to console for debugging
+    console.log('CSV Headers found:', headers);
     
     golfData = [];
     for (let i = 2; i < lines.length; i++) {
@@ -51,9 +54,15 @@ function parseCSV(text) {
         const values = lines[i].split(',');
         const shot = {};
         headers.forEach((header, index) => {
-            shot[header] = values[index];
+            shot[header] = values[index] ? values[index].trim() : '';
         });
         golfData.push(shot);
+    }
+    
+    // Log first shot to see what data we have
+    if (golfData.length > 0) {
+        console.log('First shot data:', golfData[0]);
+        console.log('Available columns:', Object.keys(golfData[0]));
     }
     
     displayData();
@@ -590,8 +599,17 @@ function displayAutomaticInsights() {
     const insights = analyzeGolfData(golfData);
     const insightsDiv = document.getElementById('insights');
     
-    // Get club info
-    const clubNames = golfData.map(s => s['Club Name'] || s['Club Type'] || '').filter(c => c);
+    // Get club info - try multiple possible column names
+    const clubNames = golfData.map(s => 
+        s['Club Name'] || 
+        s['Club Type'] || 
+        s['Club'] || 
+        s['club'] || 
+        s['Club name'] || 
+        s['club name'] || 
+        s['ClubName'] ||
+        ''
+    ).filter(c => c);
     const detectedClub = clubNames.length > 0 ? clubNames[0] : 'Unknown Club';
     
     // Calculate key metrics
@@ -1128,10 +1146,17 @@ function createAttackChart() {
 function createConsistencyChart(selectedClub = null) {
     const ctx = document.getElementById('consistencyChart').getContext('2d');
     
-    // Group shots by club
+    // Group shots by club - try multiple possible column names
     const clubGroups = {};
     golfData.forEach((shot, index) => {
-        const club = shot['Club Name'] || 'Unknown';
+        const club = shot['Club Name'] || 
+                    shot['Club Type'] || 
+                    shot['Club'] || 
+                    shot['club'] || 
+                    shot['Club name'] || 
+                    shot['club name'] || 
+                    shot['ClubName'] ||
+                    'Unknown';
         if (!clubGroups[club]) clubGroups[club] = [];
         clubGroups[club].push({
             index,
