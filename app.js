@@ -567,20 +567,8 @@ function createLaunchChart() {
     });
 }
 
-// API Key handling
-document.getElementById('saveKey').addEventListener('click', () => {
-    const key = document.getElementById('geminiKey').value;
-    if (key) {
-        localStorage.setItem('geminiApiKey', key);
-        alert('API key saved!');
-    }
-});
-
-// Load saved key from localStorage only (no hardcoded default)
-const savedKey = localStorage.getItem('geminiApiKey');
-if (savedKey) {
-    document.getElementById('geminiKey').value = savedKey;
-}
+// API key is now stored in Netlify environment variables
+// No need for manual entry or localStorage
 
 // Display automatic insights (no API needed)
 function displayAutomaticInsights() {
