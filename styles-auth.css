@@ -45,9 +45,15 @@
     width: 100%;
 }
 
-.primary-button:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 8px 20px rgba(16, 185, 129, 0.3);
+@media (hover: hover) {
+    .primary-button:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 8px 20px rgba(16, 185, 129, 0.3);
+    }
+}
+
+.primary-button:active {
+    transform: scale(0.98);
 }
 
 .secondary-button {
@@ -61,12 +67,62 @@
     transition: all 0.2s;
 }
 
-.secondary-button:hover {
-    background: var(--surface);
-    border-color: var(--primary);
+@media (hover: hover) {
+    .secondary-button:hover {
+        background: var(--surface);
+        border-color: var(--primary);
+    }
+}
+
+.secondary-button:active {
+    transform: scale(0.95);
 }
 
 .user-bar {
     display: flex;
     align-items: center;
+}
+
+/* Mobile auth styles */
+@media (max-width: 768px) {
+    .auth-section {
+        padding: 16px;
+    }
+
+    .auth-card {
+        padding: 32px 20px;
+    }
+
+    .auth-card h2 {
+        font-size: 24px;
+    }
+
+    .auth-card p {
+        font-size: 14px;
+        margin-bottom: 24px;
+    }
+
+    .primary-button {
+        font-size: 14px;
+        padding: 14px 28px;
+    }
+
+    .secondary-button {
+        font-size: 13px;
+        padding: 6px 12px;
+    }
+}
+
+@media (max-width: 375px) {
+    .auth-card {
+        padding: 24px 16px;
+    }
+
+    .auth-card h2 {
+        font-size: 20px;
+    }
+
+    .auth-card p {
+        font-size: 13px;
+    }
 }
