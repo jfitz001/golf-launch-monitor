@@ -1092,7 +1092,31 @@ function createAttackChart() {
 
 function createConsistencyChart() {
     const ctx = document.getElementById('consistencyChart').getContext('2d');
-    const distances = golfData.map(s => parseFloat(s['Carry Distance']) || 0);
+    
+    // Group shots by club
+    const clubGroups = {};
+    golfData.forEach((shot, index) => {
+        const club = shot['Club Name'] || 'Unknown';
+        if (!clubGroups[club]) clubGroups[club] = [];
+        clubGroups[club].push({
+            index,
+            distance: parseFloat(shot['Carry Distance']) || 0
+        });
+    });
+    
+    // Find the club with the most shots
+    let mainClub = 'Unknown';
+    let maxShots = 0;
+    Object.entries(clubGroups).forEach(([club, shots]) => {
+        if (shots.length > maxShots) {
+            maxShots = shots.length;
+            mainClub = club;
+        }
+    });
+    
+    // Use only the main club's data
+    const clubData = clubGroups[mainClub];
+    const distances = clubData.map(s => s.distance);
     const avgDistance = distances.reduce((a, b) => a + b, 0) / distances.length;
     
     if (charts.consistency) charts.consistency.destroy();
@@ -1112,7 +1136,7 @@ function createConsistencyChart() {
             labels: distances.map((_, i) => `${i + 1}`),
             datasets: [
                 {
-                    label: 'Shot Distance',
+                    label: `${mainClub} Shot Distance`,
                     data: distances,
                     borderColor: 'rgba(124, 58, 237, 0.6)',
                     backgroundColor: 'rgba(124, 58, 237, 0.1)',
@@ -1142,7 +1166,13 @@ function createConsistencyChart() {
             responsive: true,
             maintainAspectRatio: true,
             plugins: {
-                legend: { labels: { color: '#f1f5f9' } }
+                legend: { labels: { color: '#f1f5f9' } },
+                title: {
+                    display: true,
+                    text: `${mainClub} Consistency (${distances.length} shots)`,
+                    color: '#f1f5f9',
+                    font: { size: 14 }
+                }
             },
             scales: {
                 y: {
@@ -1151,7 +1181,7 @@ function createConsistencyChart() {
                     ticks: { color: '#94a3b8' }
                 },
                 x: {
-                    title: { display: true, text: 'Shot Number', color: '#94a3b8' },
+                    title: { display: true, text: 'Shot Number (this club only)', color: '#94a3b8' },
                     grid: { color: 'rgba(71, 85, 105, 0.3)' },
                     ticks: { 
                         color: '#94a3b8',
