@@ -49,17 +49,31 @@ if (logoutBtn) {
 }
 
 function showApp(user) {
-    if (authSection) authSection.classList.add('hidden');
-    if (appSection) appSection.classList.remove('hidden');
-    if (userEmail) userEmail.textContent = user.email;
+    console.log('Showing app for user:', user.email);
+    if (authSection) {
+        authSection.style.display = 'none';
+    }
+    if (appSection) {
+        appSection.style.display = 'block';
+    }
+    if (userEmail) {
+        userEmail.textContent = user.email;
+    }
     
     // Store user token for API calls
-    localStorage.setItem('netlify_token', user.token.access_token);
+    if (user.token && user.token.access_token) {
+        localStorage.setItem('netlify_token', user.token.access_token);
+    }
 }
 
 function showAuth() {
-    if (authSection) authSection.classList.remove('hidden');
-    if (appSection) appSection.classList.add('hidden');
+    console.log('Showing auth screen');
+    if (authSection) {
+        authSection.style.display = 'flex';
+    }
+    if (appSection) {
+        appSection.style.display = 'none';
+    }
     localStorage.removeItem('netlify_token');
 }
 
