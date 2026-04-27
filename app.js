@@ -78,6 +78,9 @@ function parseCSV(text) {
     localStorage.setItem('currentGolfData', JSON.stringify(golfData));
     localStorage.setItem('golfData', JSON.stringify(golfData));
     
+    // Mark as new upload (timestamp)
+    localStorage.setItem('lastUploadTime', Date.now().toString());
+    
     displayData();
 }
 

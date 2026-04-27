@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Session Overview - Golf Analytics</title>
+    <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="styles-auth.css">
+    <link rel="stylesheet" href="styles-table.css">
+    <link rel="stylesheet" href="netlify-identity.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <script type="text/javascript" src="https://identity.netlify.com/v1/netlify-identity-widget.js"></script>
+</head>
+<body>
+    <!-- Auth Section -->
+    <div id="auth-section" class="auth-section hidden">
+        <div class="auth-card">
+            <h2>Golf Launch Monitor</h2>
+            <p>Sign in to view your progress</p>
+            <button id="login-btn" class="primary-button">Sign In / Sign Up</button>
+        </div>
+    </div>
+
+    <!-- App Section -->
+    <div id="app-section">
+        <button class="sessions-toggle" id="sessionsToggle">
+            <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M3 12h18M3 6h18M3 18h18"/>
+            </svg>
+            Sessions
+        </button>
+
+        <div class="sessions-panel" id="sessionsPanel">
+            <div class="sessions-panel-header">
+                <div class="sessions-panel-title">Session History</div>
+                <button class="sessions-panel-close" id="sessionsPanelClose">&times;</button>
+                <button class="new-session-btn" id="saveSessionBtn">Save Current Session</button>
+            </div>
+            <div class="sessions-list" id="sessionsList">
+                <div style="text-align: center; color: var(--text-secondary); padding: 40px 20px;">
+                    No sessions saved yet
+                </div>
+            </div>
+        </div>
+
+        <div class="container">
+            <header>
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                    <div>
+                        <h1>Session Overview</h1>
+                        <p class="subtitle">Track Progress Over Time</p>
+                    </div>
+                    <div class="user-bar">
+                        <span id="user-email" style="margin-right: 16px; color: var(--text-secondary);"></span>
+                        <button id="logout-btn" class="secondary-button">Logout</button>
+                    </div>
+                </div>
+                <nav style="margin-top: 20px;">
+                    <a href="index.html" class="nav-link">Overview</a>
+                    <a href="charts.html" class="nav-link">Charts</a>
+                    <a href="analysis.html" class="nav-link">Analysis</a>
+                    <a href="training.html" class="nav-link">Training</a>
+                    <a href="overview.html" class="nav-link active">Progress</a>
+                    <a href="data-table.html" class="nav-link">Data Table</a>
+                    <a href="admin.html" class="nav-link" id="admin-link" style="display: none;">Admin</a>
+                </nav>
+            </header>
+
+            <div id="dataLoaded" class="hidden">
+                <!-- Progress Summary Cards -->
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <div class="stat-label">Total Sessions</div>
+                        <div class="stat-value" id="totalSessions">0</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-label">Best Swing Score</div>
+                        <div class="stat-value" id="bestScore">0</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-label">Avg Improvement</div>
+                        <div class="stat-value" id="avgImprovement">--</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-label">Practice Hours</div>
+                        <div class="stat-value" id="practiceHours">0h</div>
+                    </div>
+                </div>
+
+                <!-- Trend Charts -->
+                <div class="charts-grid">
+                    <div class="chart-card">
+                        <h3>Swing Score Progress</h3>
+                        <canvas id="scoreProgressChart"></canvas>
+                    </div>
+                    <div class="chart-card">
+                        <h3>Distance Trends</h3>
+                        <canvas id="distanceTrendsChart"></canvas>
+                    </div>
+                    <div class="chart-card">
+                        <h3>Consistency Improvement</h3>
+                        <canvas id="consistencyTrendsChart"></canvas>
+                    </div>
+                    <div class="chart-card">
+                        <h3>Club Performance by Session</h3>
+                        <canvas id="clubTrendsChart"></canvas>
+                    </div>
+                </div>
+
+                <!-- Session List -->
+                <div class="insights-section">
+                    <h2>Session History</h2>
+                    <div id="sessionHistory" class="drills-content"></div>
+                </div>
+            </div>
+
+            <div id="noData" class="upload-section">
+                <div class="upload-card">
+                    <h2>No Sessions Yet</h2>
+                    <p>Go to <a href="index.html" style="color: var(--primary);">Overview</a> to upload data and save your first session.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="analysis.js"></script>
+    <script src="sessions.js"></script>
+    <script src="app.js"></script>
+    <script src="auth.js"></script>
+    <script src="overview.js"></script>
+</body>
+</html>
