@@ -1,6 +1,11 @@
 // Netlify Identity authentication
 const netlifyIdentity = window.netlifyIdentity;
 
+// Configure Netlify Identity (hide branding)
+if (netlifyIdentity) {
+    netlifyIdentity.setLocale('en');
+}
+
 // Initialize Netlify Identity
 netlifyIdentity.on('init', user => {
     if (user) {
