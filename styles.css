@@ -490,6 +490,13 @@ header h1 {
     border-radius: 12px;
     padding: 24px;
     border-left: 4px solid var(--primary);
+    transition: all 0.2s ease;
+}
+
+.drill-card:hover {
+    background: var(--surface-light);
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
 }
 
 .drill-card h4 {
@@ -501,6 +508,14 @@ header h1 {
 .drill-card p {
     color: var(--text-secondary);
     font-size: 14px;
+}
+
+.drill-toggle {
+    user-select: none;
+}
+
+.drill-content {
+    transition: max-height 0.3s ease-out;
 }
 
 .hidden {

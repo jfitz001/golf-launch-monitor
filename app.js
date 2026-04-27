@@ -900,22 +900,42 @@ function updateDrills(insights) {
         const priorityColor = drill.score >= 12 ? 'var(--danger)' : 
                              drill.score >= 9 ? 'var(--warning)' : 
                              'var(--primary)';
+        const drillId = `drill-${index}`;
         
-        html += `<div class="drill-card" style="border-left-color: ${priorityColor}">
+        html += `<div class="drill-card expandable-drill" style="border-left-color: ${priorityColor}; cursor: pointer;" onclick="toggleDrill('${drillId}')">
             <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 8px;">
                 <h4 style="margin: 0;">${index + 1}. ${drill.title}</h4>
-                <span style="font-size: 11px; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.5px;">
-                    ${drill.score >= 12 ? 'Critical' : drill.score >= 9 ? 'High Priority' : 'Recommended'}
-                </span>
+                <div style="display: flex; gap: 8px; align-items: center;">
+                    <span style="font-size: 11px; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.5px;">
+                        ${drill.score >= 12 ? 'Critical' : drill.score >= 9 ? 'High Priority' : 'Recommended'}
+                    </span>
+                    <span class="drill-toggle" id="${drillId}-toggle" style="font-size: 18px; transition: transform 0.3s;">▼</span>
+                </div>
             </div>
             ${drill.issue ? `<div style="font-size: 13px; color: var(--text-secondary); margin-bottom: 12px; font-style: italic;">Addresses: ${drill.issue}</div>` : ''}
-            <p style="margin-bottom: 12px;">${drill.desc}</p>
-            ${drill.reps ? `<div style="font-size: 13px; color: var(--text-secondary); margin-bottom: 6px;"><strong>Reps:</strong> ${drill.reps}</div>` : ''}
-            ${drill.focus ? `<div style="font-size: 13px; color: var(--primary);"><strong>Focus:</strong> ${drill.focus}</div>` : ''}
+            <div id="${drillId}-content" class="drill-content" style="max-height: 0; overflow: hidden; transition: max-height 0.3s ease-out;">
+                <p style="margin-bottom: 12px;">${drill.desc}</p>
+                ${drill.reps ? `<div style="font-size: 13px; color: var(--text-secondary); margin-bottom: 6px;"><strong>Reps:</strong> ${drill.reps}</div>` : ''}
+                ${drill.focus ? `<div style="font-size: 13px; color: var(--primary);"><strong>Focus:</strong> ${drill.focus}</div>` : ''}
+            </div>
         </div>`;
     });
     
     drillsContent.innerHTML = html;
+}
+
+// Toggle drill expansion
+function toggleDrill(drillId) {
+    const content = document.getElementById(`${drillId}-content`);
+    const toggle = document.getElementById(`${drillId}-toggle`);
+    
+    if (content.style.maxHeight && content.style.maxHeight !== '0px') {
+        content.style.maxHeight = '0px';
+        toggle.style.transform = 'rotate(0deg)';
+    } else {
+        content.style.maxHeight = content.scrollHeight + 'px';
+        toggle.style.transform = 'rotate(180deg)';
+    }
 }
 
 // Generate insights with Gemini (optional)
