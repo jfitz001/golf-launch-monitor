@@ -104,17 +104,34 @@ async function saveCurrentSession() {
     btn.textContent = 'Saving...';
     btn.disabled = true;
     
-    // Use the data we found to calculate stats
-    const tempGolfData = dataToSave;
-    const swingScoreData = typeof calculateSwingScore !== 'undefined' ? calculateSwingScore() : { score: 0, grade: 'N/A', desc: 'Not calculated' };
-    const stats = typeof calculateSessionStats !== 'undefined' ? calculateSessionStats() : {};
+    // Temporarily set global golfData for stat calculations
+    const originalGolfData = typeof golfData !== 'undefined' ? golfData : null;
+    if (typeof window !== 'undefined') {
+        window.golfData = dataToSave;
+    }
+    
+    let swingScoreData, stats;
+    try {
+        // Calculate stats using the temporary golfData
+        swingScoreData = typeof calculateSwingScore !== 'undefined' ? calculateSwingScore() : { score: 0, grade: 'N/A', desc: 'Not calculated' };
+        stats = typeof calculateSessionStats !== 'undefined' ? calculateSessionStats() : {};
+    } catch (error) {
+        console.error('Error calculating stats:', error);
+        swingScoreData = { score: 0, grade: 'N/A', desc: 'Error calculating' };
+        stats = {};
+    } finally {
+        // Restore original golfData
+        if (typeof window !== 'undefined' && originalGolfData !== null) {
+            window.golfData = originalGolfData;
+        }
+    }
     
     const session = {
         id: Date.now(),
         name: sessionName,
         date: new Date().toISOString(),
         timestamp: Date.now(),
-        data: tempGolfData,
+        data: dataToSave,
         swingScore: {
             score: swingScoreData.score,
             description: `${swingScoreData.grade} - ${swingScoreData.desc}`

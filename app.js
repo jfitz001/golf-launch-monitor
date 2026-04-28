@@ -1,4 +1,6 @@
 let golfData = [];
+// Make golfData globally accessible
+window.golfData = golfData;
 let charts = {};
 
 // Check if user is admin and show admin link
@@ -57,6 +59,7 @@ function parseCSV(text) {
     console.log('CSV Headers found:', headers);
     
     golfData = [];
+    window.golfData = golfData;
     for (let i = 2; i < lines.length; i++) {
         if (!lines[i].trim()) continue;
         
@@ -74,6 +77,9 @@ function parseCSV(text) {
         console.log('Available columns:', Object.keys(golfData[0]));
     }
     
+    // Ensure window.golfData is in sync
+    window.golfData = golfData;
+    
     // Save data to localStorage for data table page
     localStorage.setItem('currentGolfData', JSON.stringify(golfData));
     localStorage.setItem('golfData', JSON.stringify(golfData));
@@ -90,6 +96,7 @@ function displayData() {
         const stored = localStorage.getItem('currentGolfData');
         if (stored && stored !== '[]') {
             golfData = JSON.parse(stored);
+            window.golfData = golfData;
         }
     }
     
