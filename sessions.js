@@ -13,6 +13,7 @@ async function saveSessions(session) {
     }
     
     try {
+        console.log('Attempting to save session to Supabase...');
         const response = await fetch('/.netlify/functions/save-session', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -23,19 +24,29 @@ async function saveSessions(session) {
         });
         
         if (!response.ok) {
-            throw new Error('Failed to save session');
+            const errorText = await response.text();
+            console.error('Save session failed:', response.status, errorText);
+            throw new Error(`Failed to save session: ${response.status} - ${errorText}`);
         }
         
         const result = await response.json();
+        console.log('Session saved to Supabase successfully!');
         
         // Also save to localStorage as backup
         const localSessions = JSON.parse(localStorage.getItem('savedSessions') || '[]');
         localSessions.push(session);
         localStorage.setItem('savedSessions', JSON.stringify(localSessions));
         
-        return result;
+        return { success: true, offline: false, ...result };
     } catch (error) {
         console.error('Error saving to Supabase, falling back to localStorage:', error);
+        
+        // Check if it's a database error
+        const errorMsg = error.message || '';
+        if (errorMsg.includes('relation') || errorMsg.includes('does not exist') || errorMsg.includes('Supabase not configured')) {
+            console.error('❌ Database tables not set up! Run the Supabase migration first.');
+        }
+        
         const localSessions = JSON.parse(localStorage.getItem('savedSessions') || '[]');
         localSessions.push(session);
         localStorage.setItem('savedSessions', JSON.stringify(localSessions));
@@ -147,7 +158,17 @@ async function saveCurrentSession() {
     if (result.success) {
         currentSessionId = session.id;
         await updateSessionsList();
-        alert(result.offline ? 'Session saved offline (will sync when online)' : 'Session saved!');
+        
+        if (result.offline) {
+            if (result.error && (result.error.includes('relation') || result.error.includes('does not exist'))) {
+                alert('⚠️ Session saved locally only.\n\nSupabase database not set up yet. Run the migration in your Supabase dashboard to enable cloud sync.\n\nYour data is safe in localStorage.');
+            } else {
+                alert('Session saved offline (will sync when database is ready)');
+            }
+        } else {
+            alert('✅ Session saved to cloud!');
+        }
+        
         document.getElementById('sessionsPanel').classList.remove('open');
     } else {
         alert('Error saving session. Please try again.');
