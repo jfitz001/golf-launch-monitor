@@ -2,8 +2,10 @@
 
 window.addEventListener('load', () => {
     const sessions = JSON.parse(localStorage.getItem('savedSessions') || '[]');
+    const currentData = localStorage.getItem('currentGolfData');
     
-    if (sessions.length === 0) {
+    // Check if we have either saved sessions OR a currently loaded session
+    if (sessions.length === 0 && (!currentData || currentData === '[]')) {
         document.getElementById('dataLoaded').style.display = 'none';
         document.getElementById('noData').classList.remove('hidden');
         return;
@@ -12,9 +14,15 @@ window.addEventListener('load', () => {
     document.getElementById('dataLoaded').classList.remove('hidden');
     document.getElementById('noData').style.display = 'none';
     
-    displaySummaryStats(sessions);
-    createProgressCharts(sessions);
-    displaySessionHistory(sessions);
+    // If we have saved sessions, show full progress tracking
+    if (sessions.length > 0) {
+        displaySummaryStats(sessions);
+        createProgressCharts(sessions);
+        displaySessionHistory(sessions);
+    } else {
+        // Only have current session - show single session stats
+        displayCurrentSessionStats();
+    }
 });
 
 function displaySummaryStats(sessions) {
@@ -44,6 +52,82 @@ function displaySummaryStats(sessions) {
     // Practice hours (estimate: 15min per session)
     const hours = (sessions.length * 15 / 60).toFixed(1);
     document.getElementById('practiceHours').textContent = `${hours}h`;
+}
+
+function displayCurrentSessionStats() {
+    // Show stats for currently loaded session only
+    try {
+        const currentData = JSON.parse(localStorage.getItem('currentGolfData') || '[]');
+        
+        if (currentData.length === 0) {
+            document.getElementById('dataLoaded').style.display = 'none';
+            document.getElementById('noData').classList.remove('hidden');
+            return;
+        }
+        
+        // Calculate basic stats from current data
+        const carryDistances = currentData.map(s => parseFloat(s['Carry Distance']) || 0).filter(d => d > 0);
+        const avgCarry = carryDistances.reduce((a, b) => a + b, 0) / carryDistances.length;
+        const stdDev = Math.sqrt(carryDistances.map(x => Math.pow(x - avgCarry, 2)).reduce((a, b) => a + b) / carryDistances.length);
+        const consistency = Math.max(0, 100 - (stdDev / avgCarry * 100));
+        
+        // Update summary cards
+        document.getElementById('totalSessions').textContent = '1';
+        document.getElementById('bestScore').textContent = Math.round(consistency);
+        document.getElementById('avgImprovement').textContent = '--';
+        document.getElementById('practiceHours').textContent = '0.25h';
+        
+        // Create a single-session "history" for charts
+        const singleSession = {
+            name: 'Current Session',
+            timestamp: Date.now(),
+            data: currentData,
+            swingScore: {
+                score: Math.round(consistency),
+                description: 'Current session'
+            },
+            stats: {
+                avgCarry: avgCarry.toFixed(1),
+                consistency: consistency.toFixed(0),
+                totalShots: currentData.length
+            }
+        };
+        
+        // Create charts with just this one session
+        createProgressCharts([singleSession]);
+        
+        // Display session history
+        const historyDiv = document.getElementById('sessionHistory');
+        historyDiv.innerHTML = `
+            <div class="drill-card" style="background: var(--card);">
+                <h3>${singleSession.name}</h3>
+                <p style="color: var(--text-secondary); margin: 8px 0;">
+                    ${new Date(singleSession.timestamp).toLocaleDateString()} at ${new Date(singleSession.timestamp).toLocaleTimeString()}
+                </p>
+                <div class="stats-grid" style="margin-top: 16px;">
+                    <div>
+                        <div style="color: var(--text-secondary); font-size: 0.875rem;">Shots</div>
+                        <div style="font-size: 1.5rem; font-weight: bold; color: var(--primary);">${singleSession.stats.totalShots}</div>
+                    </div>
+                    <div>
+                        <div style="color: var(--text-secondary); font-size: 0.875rem;">Avg Distance</div>
+                        <div style="font-size: 1.5rem; font-weight: bold; color: var(--primary);">${singleSession.stats.avgCarry} yds</div>
+                    </div>
+                    <div>
+                        <div style="color: var(--text-secondary); font-size: 0.875rem;">Consistency</div>
+                        <div style="font-size: 1.5rem; font-weight: bold; color: var(--primary);">${singleSession.stats.consistency}%</div>
+                    </div>
+                </div>
+                <p style="margin-top: 16px; color: var(--warning);">
+                    💡 Save this session to track progress over time
+                </p>
+            </div>
+        `;
+    } catch (error) {
+        console.error('Error displaying current session:', error);
+        document.getElementById('dataLoaded').style.display = 'none';
+        document.getElementById('noData').classList.remove('hidden');
+    }
 }
 
 function createProgressCharts(sessions) {
