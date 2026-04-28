@@ -1,3 +1,5 @@
+@import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600;9..144,700&family=Sora:wght@400;500;600;700;800&display=swap');
+
 * {
     margin: 0;
     padding: 0;
@@ -11,29 +13,33 @@ html {
 }
 
 :root {
-    --primary: #0f172a;
-    --primary-dark: #020617;
-    --primary-light: #1e293b;
-    --secondary: #3b82f6;
-    --accent: #10b981;
-    --bg: #f8fafc;
+    --primary: #0f4b38;
+    --primary-dark: #083225;
+    --primary-light: #1f6b52;
+    --secondary: #c49a3a;
+    --accent: #27b776;
+    --bg: #f5f7f2;
     --surface: #ffffff;
-    --surface-light: #f1f5f9;
-    --text: #0f172a;
-    --text-secondary: #64748b;
-    --border: #e2e8f0;
-    --success: #10b981;
-    --warning: #f59e0b;
-    --danger: #ef4444;
-    --gradient-start: #0f172a;
-    --gradient-end: #334155;
+    --surface-light: #eef4ee;
+    --text: #14221b;
+    --text-secondary: #587264;
+    --border: #d2dfd6;
+    --success: #1fa463;
+    --warning: #cc8f24;
+    --danger: #d64141;
+    --gradient-start: #0f4b38;
+    --gradient-end: #1d6f52;
 }
 
 body {
-    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+    font-family: 'Sora', 'Avenir Next', 'Segoe UI', sans-serif;
     background: var(--bg);
     color: var(--text);
     line-height: 1.6;
+    background-image:
+        radial-gradient(circle at 10% -10%, rgba(196, 154, 58, 0.14), transparent 40%),
+        radial-gradient(circle at 90% 0%, rgba(39, 183, 118, 0.12), transparent 45%);
+    background-attachment: fixed;
 }
 
 .container {
@@ -47,16 +53,18 @@ header {
     border-radius: 24px;
     padding: 32px 40px;
     margin-bottom: 32px;
-    box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+    box-shadow: 0 20px 34px -14px rgba(15, 75, 56, 0.55);
     min-height: 140px;
+    border: 1px solid rgba(255, 255, 255, 0.14);
 }
 
 header h1 {
     font-size: 32px;
+    font-family: 'Fraunces', Georgia, serif;
     font-weight: 700;
     color: white;
     margin-bottom: 8px;
-    letter-spacing: -0.025em;
+    letter-spacing: -0.01em;
 }
 
 .subtitle {
@@ -86,6 +94,7 @@ nav {
     transition: all 0.2s ease;
     background: rgba(255, 255, 255, 0.1);
     backdrop-filter: blur(10px);
+    border: 1px solid rgba(255, 255, 255, 0.15);
 }
 
 .nav-link:hover {
@@ -94,8 +103,8 @@ nav {
 }
 
 .nav-link.active {
-    background: white;
-    color: var(--primary);
+    background: #f7f7f3;
+    color: var(--primary-dark);
 }
 
 .user-bar {
@@ -126,7 +135,17 @@ nav {
     padding: 48px;
     text-align: center;
     transition: all 0.3s ease;
-    box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1);
+    box-shadow: 0 12px 28px -20px rgba(15, 75, 56, 0.35);
+    position: relative;
+    overflow: hidden;
+}
+
+.upload-card::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(135deg, rgba(15, 75, 56, 0.04), rgba(196, 154, 58, 0.06));
+    pointer-events: none;
 }
 
 .upload-card:hover {
@@ -148,7 +167,9 @@ nav {
     cursor: pointer;
     transition: all 0.2s ease;
     border: none;
-    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+    box-shadow: 0 10px 22px -12px rgba(15, 75, 56, 0.8);
+    position: relative;
+    z-index: 1;
 }
 
 .upload-button:hover {
@@ -161,6 +182,17 @@ nav {
     margin-top: 16px;
     color: var(--text-secondary);
     font-size: 14px;
+    position: relative;
+    z-index: 1;
+}
+
+.upload-summary {
+    margin-top: 10px;
+    color: var(--primary-light);
+    font-size: 13px;
+    font-weight: 600;
+    position: relative;
+    z-index: 1;
 }
 
 .api-config {
@@ -246,8 +278,8 @@ nav {
     right: 24px;
     background: var(--primary);
     border: none;
-    border-radius: 8px;
-    padding: 12px 20px;
+    border-radius: 14px;
+    padding: 12px 18px;
     color: white;
     cursor: pointer;
     z-index: 1001;
@@ -256,8 +288,9 @@ nav {
     display: flex;
     align-items: center;
     gap: 8px;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+    box-shadow: 0 14px 28px -14px rgba(8, 50, 37, 0.8);
     transition: all 0.2s ease;
+    border: 1px solid rgba(255, 255, 255, 0.3);
 }
 
 @media (hover: hover) {
@@ -276,10 +309,11 @@ nav {
     position: fixed;
     top: 0;
     right: -400px;
-    width: 400px;
+    width: 420px;
     height: 100vh;
     background: var(--surface);
     border-left: 1px solid var(--border);
+    box-shadow: -24px 0 40px -34px rgba(8, 50, 37, 0.55);
     transition: right 0.3s ease;
     z-index: 999;
     overflow-y: auto;
@@ -326,22 +360,23 @@ nav {
 }
 
 .sessions-list {
-    padding: 16px;
+    padding: 18px;
 }
 
 .session-item {
     background: var(--bg);
     border: 1px solid var(--border);
-    border-radius: 8px;
-    padding: 16px;
-    margin-bottom: 12px;
+    border-radius: 14px;
+    padding: 18px;
+    margin-bottom: 14px;
     cursor: pointer;
     transition: all 0.2s ease;
 }
 
 .session-item:hover {
     border-color: var(--primary);
-    background: var(--surface-light);
+    background: #f3f8f4;
+    box-shadow: 0 10px 22px -16px rgba(15, 75, 56, 0.6);
 }
 
 .session-item.active {
@@ -378,6 +413,7 @@ nav {
     border-radius: 6px;
     font-size: 12px;
     cursor: pointer;
+    font-weight: 600;
 }
 
 .session-item-btn:hover {
@@ -399,11 +435,56 @@ nav {
     color: white;
     border: none;
     padding: 12px;
-    border-radius: 8px;
+    border-radius: 12px;
     font-size: 14px;
     font-weight: 600;
     cursor: pointer;
     margin-bottom: 16px;
+}
+
+.club-usage-sidebar {
+    margin-top: 12px;
+    padding: 12px;
+    border: 1px solid var(--border);
+    background: linear-gradient(135deg, #f6fbf7, #f4f8ef);
+    border-radius: 12px;
+}
+
+.club-usage-title {
+    font-size: 11px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--text-secondary);
+    font-weight: 700;
+    margin-bottom: 8px;
+}
+
+.club-usage-pills {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 7px;
+}
+
+.club-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: white;
+    color: var(--primary-dark);
+    border: 1px solid #c9dbcf;
+    border-radius: 999px;
+    padding: 4px 10px;
+    font-size: 12px;
+    line-height: 1.2;
+}
+
+.club-pill strong {
+    color: var(--secondary);
+}
+
+.club-usage-empty {
+    font-size: 12px;
+    color: var(--text-secondary);
 }
 
 .new-session-btn:hover {

@@ -3,12 +3,52 @@ let golfData = [];
 window.golfData = golfData;
 let charts = {};
 
+async function checkUserRateLimit(endpoint = 'app-action') {
+    const currentUser = netlifyIdentity?.currentUser();
+    if (!currentUser || !currentUser.email) {
+        return false;
+    }
+
+    try {
+        const response = await fetch('/.netlify/functions/check-rate-limit', {
+            method: 'POST',
+            headers: (typeof window.getInviteAuthHeaders === 'function')
+                ? window.getInviteAuthHeaders({ 'Content-Type': 'application/json' })
+                : { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                userEmail: currentUser.email,
+                endpoint
+            })
+        });
+
+        if (response.status === 403 || response.status === 429) {
+            return false;
+        }
+
+        if (!response.ok) {
+            return true;
+        }
+
+        const data = await response.json();
+        return !!data.allowed;
+    } catch (error) {
+        console.error('Rate limit check failed:', error);
+        return true;
+    }
+}
+
 // Check if user is admin and show admin link
 window.addEventListener('load', () => {
     const user = netlifyIdentity?.currentUser();
     if (user && user.email === 'jamiefitzgerald001@gmail.com') {
         const adminLink = document.getElementById('admin-link');
         if (adminLink) adminLink.style.display = 'inline-block';
+    }
+
+    const existingShots = loadStoredShots();
+    const summary = document.getElementById('uploadSummary');
+    if (summary && existingShots.length > 0) {
+        summary.textContent = `Current session: ${existingShots.length} shots loaded. Upload more CSV files to append.`;
     }
 });
 
@@ -33,32 +73,37 @@ if (uploadCard) {
     uploadCard.addEventListener('drop', (e) => {
         e.preventDefault();
         uploadCard.style.borderColor = 'var(--border)';
-        const file = e.dataTransfer.files[0];
-        if (file && file.name.endsWith('.csv')) {
-            processFile(file);
+        const droppedFiles = Array.from(e.dataTransfer.files || []).filter(file =>
+            file.name.toLowerCase().endsWith('.csv')
+        );
+        if (droppedFiles.length > 0) {
+            processFiles(droppedFiles);
         }
     });
 }
 
 function handleFileUpload(event) {
-    const file = event.target.files[0];
-    if (file) {
-        processFile(file);
+    const files = Array.from(event.target.files || []).filter(file =>
+        file.name.toLowerCase().endsWith('.csv')
+    );
+    if (files.length > 0) {
+        processFiles(files);
     }
+    event.target.value = '';
 }
 
-function processFile(file) {
-    const reader = new FileReader();
-    reader.onload = (e) => {
-        const text = e.target.result;
-        parseCSV(text);
-    };
-    reader.readAsText(file);
+function readCsvFile(file) {
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = (e) => resolve(String(e.target?.result || ''));
+        reader.onerror = () => reject(new Error(`Failed to read ${file.name}`));
+        reader.readAsText(file);
+    });
 }
 
-function parseCSV(text) {
+function parseCSVToShots(text) {
     const lines = text.split('\n');
-    const headers = lines[0].split(',').map(h => h.trim());
+    const headers = lines[0].split(',').map(h => h.replace(/^\uFEFF/, '').trim());
     
     console.log('CSV Headers found:', headers);
     
@@ -74,22 +119,75 @@ function parseCSV(text) {
         });
         shots.push(shot);
     }
-    
-    // Set both local and global
-    golfData = shots;
-    window.golfData = shots;
-    
-    console.log('Parsed shots:', shots.length);
-    if (shots.length > 0) {
-        console.log('First shot:', shots[0]);
+
+    return shots;
+}
+
+function loadStoredShots() {
+    try {
+        const stored = localStorage.getItem('currentGolfData');
+        if (!stored || stored === '[]') return [];
+        const parsed = JSON.parse(stored);
+        return Array.isArray(parsed) ? parsed : [];
+    } catch (error) {
+        return [];
     }
-    
-    // Save to localStorage
-    localStorage.setItem('currentGolfData', JSON.stringify(shots));
-    localStorage.setItem('golfData', JSON.stringify(shots));
-    localStorage.setItem('lastUploadTime', Date.now().toString());
-    
-    displayData();
+}
+
+function getShotFingerprint(shot) {
+    const keys = Object.keys(shot).sort();
+    return keys.map(key => `${key}:${shot[key] || ''}`).join('|');
+}
+
+function dedupeShots(shots) {
+    const seen = new Set();
+    const deduped = [];
+    shots.forEach(shot => {
+        const key = getShotFingerprint(shot);
+        if (seen.has(key)) return;
+        seen.add(key);
+        deduped.push(shot);
+    });
+    return deduped;
+}
+
+function updateUploadSummary(fileCount, newShotsCount, totalShotsCount, dedupedCount = 0) {
+    const summary = document.getElementById('uploadSummary');
+    if (!summary) return;
+    const dedupeText = dedupedCount > 0 ? ` • removed ${dedupedCount} duplicates` : '';
+    summary.textContent = `${fileCount} file${fileCount === 1 ? '' : 's'} added • ${newShotsCount} new shots • ${totalShotsCount} total shots${dedupeText}`;
+}
+
+async function processFiles(files) {
+    const validFiles = files.filter(file => file.name.toLowerCase().endsWith('.csv'));
+    if (validFiles.length === 0) return;
+
+    try {
+        const texts = await Promise.all(validFiles.map(readCsvFile));
+        const newShots = texts.flatMap(text => parseCSVToShots(text));
+        const existingShots = (Array.isArray(golfData) && golfData.length > 0) ? golfData : loadStoredShots();
+        const mergedShots = dedupeShots([...existingShots, ...newShots]);
+
+        golfData = mergedShots;
+        window.golfData = mergedShots;
+
+        localStorage.setItem('currentGolfData', JSON.stringify(mergedShots));
+        localStorage.setItem('golfData', JSON.stringify(mergedShots));
+        localStorage.setItem('lastUploadTime', Date.now().toString());
+
+        const dedupedCount = (existingShots.length + newShots.length) - mergedShots.length;
+        updateUploadSummary(validFiles.length, newShots.length, mergedShots.length, dedupedCount);
+
+        if (typeof window.updateClubSidebar === 'function') {
+            window.updateClubSidebar(mergedShots);
+        }
+        window.dispatchEvent(new CustomEvent('golf-data-updated', { detail: { shots: mergedShots } }));
+
+        displayData();
+    } catch (error) {
+        console.error('CSV upload error:', error);
+        alert(error.message || 'Failed to process uploaded CSV files.');
+    }
 }
 
 function displayData() {
@@ -108,7 +206,14 @@ function displayData() {
         return;
     }
     
-    document.getElementById('dataLoaded').classList.remove('hidden');
+    const dataLoadedSection = document.getElementById('dataLoaded');
+    if (dataLoadedSection) {
+        dataLoadedSection.classList.remove('hidden');
+    }
+
+    if (typeof window.updateClubSidebar === 'function') {
+        window.updateClubSidebar(golfData);
+    }
     
     // Calculate stats
     const carryDistances = golfData.map(s => parseFloat(s['Carry Distance']) || 0);
@@ -119,10 +224,15 @@ function displayData() {
     const consistency = Math.max(0, 100 - (stdDev / avgCarry * 100)).toFixed(0);
     
     // Update stats cards
-    document.getElementById('totalShots').textContent = totalShots;
-    document.getElementById('avgCarry').textContent = `${avgCarry} yds`;
-    document.getElementById('bestShot').textContent = `${bestShot} yds`;
-    document.getElementById('consistency').textContent = `${consistency}%`;
+    const totalShotsEl = document.getElementById('totalShots');
+    const avgCarryEl = document.getElementById('avgCarry');
+    const bestShotEl = document.getElementById('bestShot');
+    const consistencyEl = document.getElementById('consistency');
+
+    if (totalShotsEl) totalShotsEl.textContent = totalShots;
+    if (avgCarryEl) avgCarryEl.textContent = `${avgCarry} yds`;
+    if (bestShotEl) bestShotEl.textContent = `${bestShot} yds`;
+    if (consistencyEl) consistencyEl.textContent = `${consistency}%`;
     
     // Create charts
     createDispersionChart();
@@ -1251,10 +1361,15 @@ function toggleDrill(drillId) {
 const generateInsightsBtn = document.getElementById('generateInsights');
 if (generateInsightsBtn) {
 generateInsightsBtn.addEventListener('click', async () => {
-    const apiKey = localStorage.getItem('geminiApiKey');
-    if (!apiKey) {
-        alert('Gemini API key not configured. Using built-in analysis instead.');
-        displayAutomaticInsights();
+    const currentUser = netlifyIdentity?.currentUser();
+    if (!currentUser || !currentUser.email) {
+        alert('Sign in required for AI analysis.');
+        return;
+    }
+
+    const allowed = await checkUserRateLimit('gemini-proxy');
+    if (!allowed) {
+        alert('Rate limit reached (or access revoked).');
         return;
     }
     
@@ -1284,12 +1399,15 @@ Format as HTML with proper styling.`;
 
         const startTime = Date.now();
         
-        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`, {
+        const response = await fetch('/.netlify/functions/gemini-proxy', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: (typeof window.getInviteAuthHeaders === 'function')
+                ? window.getInviteAuthHeaders({ 'Content-Type': 'application/json' })
+                : { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-                contents: [{ 
-                    parts: [{ text: prompt }] 
+                userEmail: currentUser.email,
+                contents: [{
+                    parts: [{ text: prompt }]
                 }]
             })
         });
@@ -1297,10 +1415,16 @@ Format as HTML with proper styling.`;
         const responseTime = Date.now() - startTime;
         
         const data = await response.json();
+        if (response.status === 429) {
+            throw new Error('Rate limit reached. Try again later.');
+        }
+        if (response.status === 403) {
+            throw new Error('Access revoked by admin.');
+        }
         
         // Track API call for admin monitoring
         if (window.trackApiCall) {
-            window.trackApiCall('gemini-api', response.status, responseTime);
+            window.trackApiCall('gemini-proxy', response.status, responseTime);
         }
         
         if (!data.candidates || !data.candidates[0]) {

@@ -1,40 +1,39 @@
+import { requireInviteAccess } from './_invite.js';
+import { getAdminEmail, getSupabaseConfig, isAdminEmail } from './_access.js';
+
 // Get all users for admin - using REST API
 export default async (req, context) => {
   if (req.method !== 'GET') {
     return new Response('Method not allowed', { status: 405 });
   }
 
+  const inviteAccess = requireInviteAccess(req);
+  if (!inviteAccess.ok) {
+    return inviteAccess.response;
+  }
+
   try {
     const url = new URL(req.url);
-    const adminEmail = url.searchParams.get('admin');
-    
-    // Check admin access
-    if (adminEmail !== 'jamiefitzgerald001@gmail.com') {
+    const requesterEmail = String(url.searchParams.get('admin') || '').trim().toLowerCase();
+
+    if (!isAdminEmail(requesterEmail)) {
       return new Response(JSON.stringify({ error: 'Unauthorized' }), {
         status: 403,
         headers: { 'Content-Type': 'application/json' }
       });
     }
 
-    const projectKey = process.env.PROJECT_KEY;
-    const serviceKey = process.env.SERVICE_ROLE_KEY;
-
-    if (!projectKey || !serviceKey) {
+    const config = getSupabaseConfig();
+    if (!config) {
       return new Response(JSON.stringify({ error: 'Supabase not configured' }), {
         status: 500,
         headers: { 'Content-Type': 'application/json' }
       });
     }
 
-    const supabaseUrl = `https://${projectKey}.supabase.co`;
-    const headers = {
-      'Content-Type': 'application/json',
-      'apikey': serviceKey,
-      'Authorization': `Bearer ${serviceKey}`
-    };
-
-    // Fetch all users
-    const usersRes = await fetch(`${supabaseUrl}/rest/v1/users?select=*`, { headers });
+    const usersRes = await fetch(`${config.supabaseUrl}/rest/v1/users?select=*`, {
+      headers: config.headers
+    });
 
     if (!usersRes.ok) {
       const errorText = await usersRes.text();
@@ -46,10 +45,12 @@ export default async (req, context) => {
 
     const users = await usersRes.json();
 
-    // Transform
-    const transformed = (users || []).map(u => ({
+    const adminEmail = getAdminEmail();
+    const transformed = (users || []).map((u) => ({
       email: u.email,
-      role: u.email === 'jamiefitzgerald001@gmail.com' ? 'admin' : 'user',
+      role: String(u.email || '').toLowerCase() === adminEmail ? 'admin' : 'user',
+      blocked: !!u.is_blocked,
+      rateLimitExempt: !!u.rate_limit_exempt,
       lastActive: u.updated_at || u.created_at
     }));
 

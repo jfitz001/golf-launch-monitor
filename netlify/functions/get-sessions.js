@@ -1,7 +1,15 @@
+import { requireInviteAccess } from './_invite.js';
+import { getSupabaseConfig, requireActiveUser } from './_access.js';
+
 // Get all golf sessions for the current user - using REST API
 export default async (req, context) => {
   if (req.method !== 'GET' && req.method !== 'POST') {
     return new Response('Method not allowed', { status: 405 });
+  }
+
+  const inviteAccess = requireInviteAccess(req);
+  if (!inviteAccess.ok) {
+    return inviteAccess.response;
   }
 
   try {
@@ -21,50 +29,34 @@ export default async (req, context) => {
       });
     }
 
-    const projectKey = process.env.PROJECT_KEY;
-    const serviceKey = process.env.SERVICE_ROLE_KEY;
-
-    if (!projectKey || !serviceKey) {
+    const config = getSupabaseConfig();
+    if (!config) {
       return new Response(JSON.stringify({ error: 'Supabase not configured' }), {
         status: 500,
         headers: { 'Content-Type': 'application/json' }
       });
     }
 
-    const supabaseUrl = `https://${projectKey}.supabase.co`;
-    const headers = {
-      'Content-Type': 'application/json',
-      'apikey': serviceKey,
-      'Authorization': `Bearer ${serviceKey}`
-    };
+    const activeUser = await requireActiveUser(String(userEmail).trim().toLowerCase(), {
+      createIfMissing: false
+    });
 
-    // Get user ID
-    const userRes = await fetch(
-      `${supabaseUrl}/rest/v1/users?email=eq.${encodeURIComponent(userEmail)}&select=id`,
-      { headers }
-    );
-
-    if (!userRes.ok) {
-      return new Response(JSON.stringify({ sessions: [] }), {
-        status: 200,
-        headers: { 'Content-Type': 'application/json' }
-      });
+    if (!activeUser.ok) {
+      // If user not created yet, return empty list instead of error
+      if (activeUser.response.status === 404) {
+        return new Response(JSON.stringify({ sessions: [] }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' }
+        });
+      }
+      return activeUser.response;
     }
 
-    const users = await userRes.json();
-    if (!users || users.length === 0) {
-      return new Response(JSON.stringify({ sessions: [] }), {
-        status: 200,
-        headers: { 'Content-Type': 'application/json' }
-      });
-    }
+    const userId = activeUser.user.id;
 
-    const userId = users[0].id;
-
-    // Fetch sessions
     const sessionsRes = await fetch(
-      `${supabaseUrl}/rest/v1/golf_sessions?user_id=eq.${userId}&order=created_at.desc`,
-      { headers }
+      `${config.supabaseUrl}/rest/v1/golf_sessions?user_id=eq.${userId}&order=created_at.desc`,
+      { headers: config.headers }
     );
 
     if (!sessionsRes.ok) {
@@ -77,7 +69,6 @@ export default async (req, context) => {
 
     const sessions = await sessionsRes.json();
 
-    // Transform to match localStorage format
     const transformed = (sessions || []).map(s => ({
       id: s.id,
       name: s.club_type || 'Golf Session',

@@ -1,6 +1,13 @@
 // Admin functionality
 const ADMIN_EMAIL = 'jamiefitzgerald001@gmail.com';
 
+function withInviteHeaders(baseHeaders = {}) {
+    if (typeof window.getInviteAuthHeaders === 'function') {
+        return window.getInviteAuthHeaders(baseHeaders);
+    }
+    return { ...baseHeaders };
+}
+
 // Check if user is admin
 function checkAdminAccess() {
     const user = netlifyIdentity.currentUser();
@@ -41,6 +48,15 @@ let apiUsageData = {
     users: []
 };
 
+function escapeHtml(value = '') {
+    return String(value)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+}
+
 async function loadAdminData() {
     try {
         // Show loading state
@@ -49,7 +65,9 @@ async function loadAdminData() {
         document.getElementById('total-users').textContent = '...';
         
         // Fetch real database stats from Supabase
-        const dbStatsResponse = await fetch('/.netlify/functions/get-database-stats');
+        const dbStatsResponse = await fetch('/.netlify/functions/get-database-stats', {
+            headers: withInviteHeaders()
+        });
         if (dbStatsResponse.ok) {
             const dbStats = await dbStatsResponse.json();
             
@@ -100,10 +118,10 @@ async function loadAdminData() {
         
         const response = await fetch('/.netlify/functions/get-usage-stats', {
             method: 'GET',
-            headers: {
+            headers: withInviteHeaders({
                 'Authorization': `Bearer ${token}`,
                 'Content-Type': 'application/json'
-            }
+            })
         });
         
         if (response.ok) {
@@ -134,11 +152,7 @@ async function loadAdminData() {
             }
         }
         
-        // Load rate limit config
-        const rateLimits = JSON.parse(localStorage.getItem('rateLimits') || '{"perMinute":10,"perHour":100,"perDay":500}');
-        document.getElementById('requests-per-minute').value = rateLimits.perMinute;
-        document.getElementById('requests-per-hour').value = rateLimits.perHour;
-        document.getElementById('requests-per-day').value = rateLimits.perDay;
+        await loadRateLimitConfig();
         
         // Load API request log and user list
         await Promise.all([
@@ -195,9 +209,9 @@ async function loadUserList() {
         // Pass admin email to verify authorization
         const response = await fetch(`/.netlify/functions/get-users?admin=${encodeURIComponent(currentUser.email)}`, {
             method: 'GET',
-            headers: {
+            headers: withInviteHeaders({
                 'Content-Type': 'application/json'
-            }
+            })
         });
         
         if (!response.ok) {
@@ -225,12 +239,15 @@ async function loadUserList() {
         
         tbody.innerHTML = users.map(user => `
             <tr>
-                <td>${user.email}</td>
+                <td>${escapeHtml(user.email)}</td>
                 <td>${user.role === 'admin' ? '<span class="role-badge">Admin</span>' : 'User'}</td>
                 <td>${new Date(user.lastActive).toLocaleDateString()}</td>
                 <td>
                     <div class="user-actions">
-                        ${user.role !== 'admin' ? '<button class="btn-revoke" onclick="revokeAccess(\'' + user.email + '\')">Revoke</button>' : '-'}
+                        ${user.role !== 'admin' ? `
+                            <button class="btn-revoke" onclick="setUserBlocked('${user.email}', ${!user.blocked})">${user.blocked ? 'Unblock' : 'Block'}</button>
+                            <button class="btn-revoke" onclick="setUserRateExempt('${user.email}', ${!user.rateLimitExempt})">${user.rateLimitExempt ? 'Limit On' : 'Limit Off'}</button>
+                        ` : '-'}
                     </div>
                 </td>
             </tr>
@@ -250,12 +267,15 @@ async function loadUserList() {
             if (data.users && data.users.length > 0) {
                 tbody.innerHTML = data.users.map(user => `
                     <tr>
-                        <td>${user.email}</td>
+                        <td>${escapeHtml(user.email)}</td>
                         <td>${user.role === 'admin' ? '<span class="role-badge">Admin</span>' : 'User'}</td>
                         <td>${new Date(user.lastActive).toLocaleDateString()}</td>
                         <td>
                             <div class="user-actions">
-                                ${user.role !== 'admin' ? '<button class="btn-revoke" onclick="revokeAccess(\'' + user.email + '\')">Revoke</button>' : '-'}
+                                ${user.role !== 'admin' ? `
+                                    <button class="btn-revoke" onclick="setUserBlocked('${user.email}', ${!user.blocked})">${user.blocked ? 'Unblock' : 'Block'}</button>
+                                    <button class="btn-revoke" onclick="setUserRateExempt('${user.email}', ${!user.rateLimitExempt})">${user.rateLimitExempt ? 'Limit On' : 'Limit Off'}</button>
+                                ` : '-'}
                             </div>
                         </td>
                     </tr>
@@ -271,15 +291,57 @@ async function loadUserList() {
     }
 }
 
+async function loadRateLimitConfig() {
+    const currentUser = netlifyIdentity?.currentUser();
+    if (!currentUser) return;
+
+    const response = await fetch(`/.netlify/functions/get-rate-limits?admin=${encodeURIComponent(currentUser.email)}`, {
+        method: 'GET',
+        headers: withInviteHeaders({
+            'Content-Type': 'application/json'
+        })
+    });
+
+    if (!response.ok) {
+        throw new Error('Failed to load rate limits');
+    }
+
+    const data = await response.json();
+    const limits = data.limits || {};
+
+    document.getElementById('requests-per-minute').value = limits.perMinute ?? 10;
+    document.getElementById('requests-per-hour').value = limits.perHour ?? 100;
+    document.getElementById('requests-per-day').value = limits.perDay ?? 500;
+}
+
 // Save rate limits
-document.getElementById('save-rate-limits').addEventListener('click', () => {
+document.getElementById('save-rate-limits').addEventListener('click', async () => {
+    const currentUser = netlifyIdentity?.currentUser();
+    if (!currentUser) return;
+
     const rateLimits = {
         perMinute: parseInt(document.getElementById('requests-per-minute').value),
         perHour: parseInt(document.getElementById('requests-per-hour').value),
         perDay: parseInt(document.getElementById('requests-per-day').value)
     };
-    
-    localStorage.setItem('rateLimits', JSON.stringify(rateLimits));
+
+    const response = await fetch('/.netlify/functions/set-rate-limits', {
+        method: 'POST',
+        headers: withInviteHeaders({
+            'Content-Type': 'application/json'
+        }),
+        body: JSON.stringify({
+            requesterEmail: currentUser.email,
+            ...rateLimits
+        })
+    });
+
+    if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
+        alert(`Failed to save rate limits: ${errorData.error}`);
+        return;
+    }
+
     alert('Rate limits saved successfully!');
 });
 
@@ -290,6 +352,7 @@ async function trackApiCall(endpoint, status, responseTime) {
         const callData = {
             timestamp: new Date().toISOString(),
             user: user ? user.email : 'anonymous',
+            userEmail: user ? user.email : '',
             endpoint: endpoint,
             status: status,
             responseTime: responseTime
@@ -298,9 +361,9 @@ async function trackApiCall(endpoint, status, responseTime) {
         // Send to backend
         await fetch('/.netlify/functions/track-api-usage', {
             method: 'POST',
-            headers: {
+            headers: withInviteHeaders({
                 'Content-Type': 'application/json'
-            },
+            }),
             body: JSON.stringify(callData)
         });
         
@@ -324,19 +387,23 @@ async function trackApiCall(endpoint, status, responseTime) {
 }
 
 // Check rate limit with backend
-async function checkRateLimit() {
+async function checkRateLimit(endpoint = 'app-action') {
     try {
         const user = netlifyIdentity?.currentUser();
-        const userId = user ? user.id : 'anonymous';
+        const userEmail = user ? user.email : '';
         
         const response = await fetch('/.netlify/functions/check-rate-limit', {
             method: 'POST',
-            headers: {
+            headers: withInviteHeaders({
                 'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({ userId })
+            }),
+            body: JSON.stringify({ userEmail, endpoint })
         });
         
+        if (response.status === 403 || response.status === 429) {
+            return false;
+        }
+
         if (response.ok) {
             const result = await response.json();
             return result.allowed;
@@ -373,15 +440,67 @@ function checkRateLimitLocal() {
     return true;
 }
 
-// Revoke user access
-function revokeAccess(email) {
-    if (confirm(`Revoke access for ${email}?`)) {
-        apiUsageData.users = apiUsageData.users.filter(u => u.email !== email);
-        apiUsageData.totalUsers = apiUsageData.users.length;
-        localStorage.setItem('adminUsageData', JSON.stringify(apiUsageData));
-        loadUserList();
-        alert('Access revoked');
+async function setUserBlocked(email, blocked) {
+    await updateUserAccess(email, { blocked });
+}
+
+async function setUserRateExempt(email, rateLimitExempt) {
+    await updateUserAccess(email, { rateLimitExempt });
+}
+
+async function updateUserAccess(email, updates) {
+    const currentUser = netlifyIdentity?.currentUser();
+    if (!currentUser) return;
+
+    const action = updates.blocked === true ? 'block' : updates.blocked === false ? 'unblock' : 'update';
+    if (!confirm(`${action.toUpperCase()} user ${email}?`)) return;
+
+    const response = await fetch('/.netlify/functions/set-user-access', {
+        method: 'POST',
+        headers: withInviteHeaders({
+            'Content-Type': 'application/json'
+        }),
+        body: JSON.stringify({
+            requesterEmail: currentUser.email,
+            targetEmail: email,
+            ...updates
+        })
+    });
+
+    if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
+        alert(`Failed: ${errorData.error}`);
+        return;
     }
+
+    await loadUserList();
+}
+
+async function addUserByEmail() {
+    const currentUser = netlifyIdentity?.currentUser();
+    if (!currentUser) return;
+
+    const email = prompt('Enter user email to add/sync (e.g., david@example.com)');
+    if (!email) return;
+
+    const response = await fetch('/.netlify/functions/upsert-user', {
+        method: 'POST',
+        headers: withInviteHeaders({
+            'Content-Type': 'application/json'
+        }),
+        body: JSON.stringify({
+            requesterEmail: currentUser.email,
+            email
+        })
+    });
+
+    if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
+        alert(`Failed to add user: ${errorData.error}`);
+        return;
+    }
+
+    await loadUserList();
 }
 
 // Data Migration Tool
@@ -420,9 +539,9 @@ document.getElementById('migrate-data-btn')?.addEventListener('click', async () 
     try {
         const response = await fetch('/.netlify/functions/migrate-localstorage', {
             method: 'POST',
-            headers: {
+            headers: withInviteHeaders({
                 'Content-Type': 'application/json'
-            },
+            }),
             body: JSON.stringify({
                 sessions: localSessions,
                 userEmail: user.email
@@ -503,3 +622,6 @@ document.getElementById('migrate-data-btn')?.addEventListener('click', async () 
 // Export functions for use in other scripts
 window.trackApiCall = trackApiCall;
 window.checkRateLimit = checkRateLimit;
+window.setUserBlocked = setUserBlocked;
+window.setUserRateExempt = setUserRateExempt;
+window.addUserByEmail = addUserByEmail;

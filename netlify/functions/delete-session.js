@@ -1,12 +1,20 @@
+import { requireInviteAccess } from './_invite.js';
+import { getSupabaseConfig, requireActiveUser } from './_access.js';
+
 // Delete golf session - using REST API
 export default async (req, context) => {
   if (req.method !== 'POST' && req.method !== 'DELETE') {
     return new Response('Method not allowed', { status: 405 });
   }
 
+  const inviteAccess = requireInviteAccess(req);
+  if (!inviteAccess.ok) {
+    return inviteAccess.response;
+  }
+
   try {
     const { sessionId, userEmail } = await req.json();
-    
+
     if (!sessionId || !userEmail) {
       return new Response(JSON.stringify({ error: 'Session ID and email required' }), {
         status: 400,
@@ -14,27 +22,26 @@ export default async (req, context) => {
       });
     }
 
-    const projectKey = process.env.PROJECT_KEY;
-    const serviceKey = process.env.SERVICE_ROLE_KEY;
-
-    if (!projectKey || !serviceKey) {
+    const config = getSupabaseConfig();
+    if (!config) {
       return new Response(JSON.stringify({ error: 'Supabase not configured' }), {
         status: 500,
         headers: { 'Content-Type': 'application/json' }
       });
     }
 
-    const supabaseUrl = `https://${projectKey}.supabase.co`;
-    const headers = {
-      'Content-Type': 'application/json',
-      'apikey': serviceKey,
-      'Authorization': `Bearer ${serviceKey}`
-    };
+    const activeUser = await requireActiveUser(String(userEmail).trim().toLowerCase(), {
+      createIfMissing: false
+    });
+    if (!activeUser.ok) {
+      return activeUser.response;
+    }
 
-    // Delete session
+    const userId = activeUser.user.id;
+
     const deleteRes = await fetch(
-      `${supabaseUrl}/rest/v1/golf_sessions?id=eq.${sessionId}`,
-      { method: 'DELETE', headers }
+      `${config.supabaseUrl}/rest/v1/golf_sessions?id=eq.${sessionId}&user_id=eq.${userId}`,
+      { method: 'DELETE', headers: config.headers }
     );
 
     if (!deleteRes.ok) {

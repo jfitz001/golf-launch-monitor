@@ -1,5 +1,76 @@
 // Session Management - Supabase with localStorage fallback
 
+function getInviteHeaders(baseHeaders = {}) {
+    if (typeof window.getInviteAuthHeaders === 'function') {
+        return window.getInviteAuthHeaders(baseHeaders);
+    }
+    return { ...baseHeaders };
+}
+
+function getShotClubName(shot) {
+    return (
+        shot['Club Name'] ||
+        shot['Club Type'] ||
+        shot['Club'] ||
+        shot['club'] ||
+        shot['Club name'] ||
+        shot['club name'] ||
+        shot['ClubName'] ||
+        'Unknown Club'
+    );
+}
+
+function renderSidebarClubUsage(shots = []) {
+    const panelHeader = document.querySelector('.sessions-panel-header');
+    if (!panelHeader) return;
+
+    let section = document.getElementById('clubUsageSidebar');
+    if (!section) {
+        section = document.createElement('div');
+        section.id = 'clubUsageSidebar';
+        section.className = 'club-usage-sidebar';
+        panelHeader.appendChild(section);
+    }
+
+    if (!Array.isArray(shots) || shots.length === 0) {
+        section.innerHTML = `
+            <div class="club-usage-title">Clubs In Current Data</div>
+            <div class="club-usage-empty">Upload CSV data to see club flags.</div>
+        `;
+        return;
+    }
+
+    const counts = shots.reduce((acc, shot) => {
+        const club = getShotClubName(shot);
+        acc[club] = (acc[club] || 0) + 1;
+        return acc;
+    }, {});
+
+    const sortedClubs = Object.entries(counts)
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 18);
+
+    const pills = sortedClubs
+        .map(([club, count]) => `<span class="club-pill">${club} <strong>${count}</strong></span>`)
+        .join('');
+
+    section.innerHTML = `
+        <div class="club-usage-title">Clubs In Current Data</div>
+        <div class="club-usage-pills">${pills}</div>
+    `;
+}
+
+function loadCurrentShotsFromStorage() {
+    try {
+        const stored = localStorage.getItem('currentGolfData');
+        if (!stored || stored === '[]') return [];
+        const parsed = JSON.parse(stored);
+        return Array.isArray(parsed) ? parsed : [];
+    } catch (error) {
+        return [];
+    }
+}
+
 // Save sessions to Supabase (with localStorage fallback)
 async function saveSessions(session) {
     const user = netlifyIdentity?.currentUser();
@@ -16,7 +87,7 @@ async function saveSessions(session) {
         console.log('Attempting to save session to Supabase...');
         const response = await fetch('/.netlify/functions/save-session', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: getInviteHeaders({ 'Content-Type': 'application/json' }),
             body: JSON.stringify({
                 session,
                 userEmail: user.email
@@ -65,7 +136,9 @@ async function loadSessions() {
     }
     
     try {
-        const response = await fetch(`/.netlify/functions/get-sessions?email=${encodeURIComponent(user.email)}`);
+        const response = await fetch(`/.netlify/functions/get-sessions?email=${encodeURIComponent(user.email)}`, {
+            headers: getInviteHeaders()
+        });
         
         if (!response.ok) {
             throw new Error('Failed to load sessions');
@@ -184,7 +257,7 @@ async function deleteSessionById(sessionId) {
         try {
             const response = await fetch('/.netlify/functions/delete-session', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: getInviteHeaders({ 'Content-Type': 'application/json' }),
                 body: JSON.stringify({
                     sessionId,
                     userEmail: user.email
@@ -230,6 +303,7 @@ async function loadSession(sessionId) {
         golfData = session.data;
     }
     window.golfData = session.data;
+    renderSidebarClubUsage(session.data);
     
     // Force full reload to refresh all charts and analysis
     window.location.reload();
@@ -239,6 +313,7 @@ let currentSessionId = null;
 
 async function updateSessionsList() {
     const listDiv = document.getElementById('sessionsList');
+    if (!listDiv) return;
     
     // Show loading state
     listDiv.innerHTML = '<div style="text-align: center; color: var(--text-secondary); padding: 40px 20px;">Loading sessions...</div>';
@@ -433,27 +508,49 @@ function updateSwingScore() {
 }
 
 // Event listeners
-document.getElementById('saveSessionBtn').addEventListener('click', saveCurrentSession);
+const saveSessionBtn = document.getElementById('saveSessionBtn');
+const sessionsToggleBtn = document.getElementById('sessionsToggle');
+const sessionsPanelCloseBtn = document.getElementById('sessionsPanelClose');
+const sessionsPanel = document.getElementById('sessionsPanel');
 
-document.getElementById('sessionsToggle').addEventListener('click', () => {
-    document.getElementById('sessionsPanel').classList.add('open');
-});
+if (saveSessionBtn) {
+    saveSessionBtn.addEventListener('click', saveCurrentSession);
+}
 
-document.getElementById('sessionsPanelClose').addEventListener('click', () => {
-    document.getElementById('sessionsPanel').classList.remove('open');
-});
+if (sessionsToggleBtn && sessionsPanel) {
+    sessionsToggleBtn.addEventListener('click', () => {
+        sessionsPanel.classList.add('open');
+    });
+}
+
+if (sessionsPanelCloseBtn && sessionsPanel) {
+    sessionsPanelCloseBtn.addEventListener('click', () => {
+        sessionsPanel.classList.remove('open');
+    });
+}
 
 // Close on outside click
 document.addEventListener('click', (e) => {
     const panel = document.getElementById('sessionsPanel');
     const toggle = document.getElementById('sessionsToggle');
+    if (!panel || !toggle) return;
     
     if (!panel.contains(e.target) && !toggle.contains(e.target)) {
         panel.classList.remove('open');
     }
 });
 
+window.updateClubSidebar = (shots) => {
+    renderSidebarClubUsage(Array.isArray(shots) ? shots : loadCurrentShotsFromStorage());
+};
+
+window.addEventListener('golf-data-updated', (event) => {
+    const shots = event?.detail?.shots;
+    renderSidebarClubUsage(Array.isArray(shots) ? shots : []);
+});
+
 // Initialize on load
 window.addEventListener('load', () => {
+    renderSidebarClubUsage(loadCurrentShotsFromStorage());
     updateSessionsList();
 });

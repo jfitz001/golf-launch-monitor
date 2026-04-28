@@ -33,7 +33,7 @@ class SyncService {
     
     async checkConnection() {
         try {
-            const response = await fetch('/.netlify/functions/get-sessions?email=ping', {
+            const response = await fetch('/upload', {
                 method: 'HEAD',
                 cache: 'no-store'
             });
@@ -110,9 +110,13 @@ class SyncService {
     }
     
     async syncSaveSession(data) {
+        const inviteHeaders = typeof window.getInviteAuthHeaders === 'function'
+            ? window.getInviteAuthHeaders()
+            : {};
+
         const response = await fetch('/.netlify/functions/save-session', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: { ...inviteHeaders, 'Content-Type': 'application/json' },
             body: JSON.stringify(data)
         });
         
@@ -124,9 +128,13 @@ class SyncService {
     }
     
     async syncDeleteSession(data) {
+        const inviteHeaders = typeof window.getInviteAuthHeaders === 'function'
+            ? window.getInviteAuthHeaders()
+            : {};
+
         const response = await fetch('/.netlify/functions/delete-session', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: { ...inviteHeaders, 'Content-Type': 'application/json' },
             body: JSON.stringify(data)
         });
         

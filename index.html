@@ -68,14 +68,15 @@
 
         <div class="upload-section">
             <div class="upload-card">
-                <input type="file" id="csvFile" accept=".csv" hidden>
+                <input type="file" id="csvFile" accept=".csv" multiple hidden>
                 <label for="csvFile" class="upload-button">
                     <svg width="24" height="24" fill="none" stroke="currentColor" stroke-width="2">
                         <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12"/>
                     </svg>
-                    Upload CSV Data
+                    Upload CSV File(s)
                 </label>
-                <p class="upload-hint">or drag and drop your Garmin R10 file here</p>
+                <p class="upload-hint">Select one or many Garmin R10 CSV files, or drag and drop a batch</p>
+                <p class="upload-summary" id="uploadSummary">No files uploaded yet</p>
             </div>
 
             <!-- API key now stored in Netlify environment variables -->

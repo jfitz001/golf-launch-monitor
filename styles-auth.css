@@ -11,15 +11,17 @@
     background: var(--surface);
     border-radius: 16px;
     padding: 48px;
-    max-width: 400px;
+    max-width: 460px;
     width: 100%;
     text-align: center;
-    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+    box-shadow: 0 16px 40px -26px rgba(8, 50, 37, 0.6);
+    border: 1px solid var(--border);
 }
 
 .auth-card h2 {
     font-size: 32px;
     margin-bottom: 16px;
+    font-family: 'Fraunces', Georgia, serif;
     background: linear-gradient(135deg, var(--gradient-start), var(--gradient-end));
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
@@ -43,6 +45,71 @@
     cursor: pointer;
     transition: transform 0.2s, box-shadow 0.2s;
     width: 100%;
+}
+
+.primary-button.is-disabled,
+.primary-button:disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
+    transform: none !important;
+    box-shadow: none !important;
+}
+
+.invite-gate {
+    margin-bottom: 18px;
+    text-align: left;
+}
+
+.invite-label {
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--text-secondary);
+    font-weight: 700;
+    display: block;
+    margin-bottom: 8px;
+}
+
+.invite-row {
+    display: flex;
+    gap: 8px;
+}
+
+.invite-input {
+    flex: 1;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 12px;
+    font-size: 14px;
+    color: var(--text);
+    background: var(--surface);
+}
+
+.invite-input:focus {
+    outline: none;
+    border-color: var(--primary);
+    box-shadow: 0 0 0 2px rgba(15, 75, 56, 0.12);
+}
+
+.invite-unlock-btn {
+    border: none;
+    background: var(--primary);
+    color: white;
+    border-radius: 10px;
+    padding: 0 16px;
+    font-size: 14px;
+    font-weight: 700;
+    cursor: pointer;
+}
+
+.invite-status {
+    margin-top: 8px;
+    font-size: 12px;
+    color: var(--text-secondary);
+}
+
+.invite-status.error {
+    color: var(--danger);
 }
 
 @media (hover: hover) {
@@ -91,6 +158,14 @@
 
     .auth-card {
         padding: 32px 20px;
+    }
+
+    .invite-row {
+        flex-direction: column;
+    }
+
+    .invite-unlock-btn {
+        height: 42px;
     }
 
     .auth-card h2 {

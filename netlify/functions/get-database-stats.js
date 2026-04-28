@@ -1,7 +1,14 @@
+import { requireInviteAccess } from './_invite.js';
+
 // Get database stats for admin - using REST API
 export default async (req, context) => {
   if (req.method !== 'GET') {
     return new Response('Method not allowed', { status: 405 });
+  }
+
+  const inviteAccess = requireInviteAccess(req);
+  if (!inviteAccess.ok) {
+    return inviteAccess.response;
   }
 
   try {
