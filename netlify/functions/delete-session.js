@@ -1,8 +1,6 @@
-// Delete a golf session from Supabase database
-import { createClient } from '@supabase/supabase-js';
-
+// Delete golf session - using REST API
 export default async (req, context) => {
-  if (req.method !== 'DELETE' && req.method !== 'POST') {
+  if (req.method !== 'POST' && req.method !== 'DELETE') {
     return new Response('Method not allowed', { status: 405 });
   }
 
@@ -16,53 +14,38 @@ export default async (req, context) => {
       });
     }
 
-    // Initialize Supabase with service role key
-    const projectKey = process.env.PROJECT_KEY || context.env?.PROJECT_KEY;
-    const supabaseUrl = projectKey ? `https://${projectKey}.supabase.co` : null;
-    const supabaseServiceKey = process.env.SERVICE_ROLE_KEY || context.env?.SERVICE_ROLE_KEY;
+    const projectKey = process.env.PROJECT_KEY;
+    const serviceKey = process.env.SERVICE_ROLE_KEY;
 
-    if (!supabaseUrl || !supabaseServiceKey) {
+    if (!projectKey || !serviceKey) {
       return new Response(JSON.stringify({ error: 'Supabase not configured' }), {
         status: 500,
         headers: { 'Content-Type': 'application/json' }
       });
     }
 
-    const supabase = createClient(supabaseUrl, supabaseServiceKey);
+    const supabaseUrl = `https://${projectKey}.supabase.co`;
+    const headers = {
+      'Content-Type': 'application/json',
+      'apikey': serviceKey,
+      'Authorization': `Bearer ${serviceKey}`
+    };
 
-    // Get user ID to verify ownership
-    const { data: users, error: userError } = await supabase
-      .from('users')
-      .select('id')
-      .eq('email', userEmail)
-      .single();
+    // Delete session
+    const deleteRes = await fetch(
+      `${supabaseUrl}/rest/v1/golf_sessions?id=eq.${sessionId}`,
+      { method: 'DELETE', headers }
+    );
 
-    if (userError || !users) {
-      return new Response(JSON.stringify({ error: 'User not found' }), {
-        status: 404,
-        headers: { 'Content-Type': 'application/json' }
-      });
-    }
-
-    // Delete session (RLS will ensure user can only delete their own sessions)
-    const { error: deleteError } = await supabase
-      .from('golf_sessions')
-      .delete()
-      .eq('id', sessionId)
-      .eq('user_id', users.id);
-
-    if (deleteError) {
-      console.error('Error deleting session:', deleteError);
-      return new Response(JSON.stringify({ error: deleteError.message }), {
+    if (!deleteRes.ok) {
+      const errorText = await deleteRes.text();
+      return new Response(JSON.stringify({ error: errorText }), {
         status: 500,
         headers: { 'Content-Type': 'application/json' }
       });
     }
 
-    return new Response(JSON.stringify({ 
-      success: true,
-      message: 'Session deleted successfully'
-    }), {
+    return new Response(JSON.stringify({ success: true }), {
       status: 200,
       headers: { 'Content-Type': 'application/json' }
     });

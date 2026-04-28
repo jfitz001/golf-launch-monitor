@@ -1,6 +1,4 @@
-// Sync Netlify Identity user to Supabase database
-import { createClient } from '@supabase/supabase-js';
-
+// Sync Netlify Identity user to Supabase database - using REST API
 export default async (req, context) => {
   if (req.method !== 'POST') {
     return new Response('Method not allowed', { status: 405 });
@@ -16,50 +14,49 @@ export default async (req, context) => {
       });
     }
 
-    // Initialize Supabase with service role key (has elevated permissions)
-    const projectKey = process.env.PROJECT_KEY || context.env?.PROJECT_KEY;
-    const supabaseUrl = projectKey ? `https://${projectKey}.supabase.co` : null;
-    const supabaseServiceKey = process.env.SERVICE_ROLE_KEY || context.env?.SERVICE_ROLE_KEY;
+    const projectKey = process.env.PROJECT_KEY;
+    const serviceKey = process.env.SERVICE_ROLE_KEY;
 
-    console.log('Supabase config check:', {
-      hasProjectKey: !!projectKey,
-      hasServiceKey: !!supabaseServiceKey,
-      url: supabaseUrl
-    });
-
-    if (!supabaseUrl || !supabaseServiceKey) {
-      const missing = [];
-      if (!projectKey) missing.push('PROJECT_KEY');
-      if (!supabaseServiceKey) missing.push('SERVICE_ROLE_KEY');
+    if (!projectKey || !serviceKey) {
       return new Response(JSON.stringify({ 
         error: 'Supabase not configured',
-        missing: missing,
-        hint: 'Set these in Netlify Environment Variables'
+        missing: !projectKey ? 'PROJECT_KEY' : 'SERVICE_ROLE_KEY'
       }), {
         status: 500,
         headers: { 'Content-Type': 'application/json' }
       });
     }
 
-    const supabase = createClient(supabaseUrl, supabaseServiceKey);
+    const supabaseUrl = `https://${projectKey}.supabase.co`;
 
-    // Call the ensure_user_exists function
-    const { data, error } = await supabase.rpc('ensure_user_exists', {
-      user_email: email,
-      netlify_user_id: netlify_id || null
+    // Call RPC function via REST API
+    const response = await fetch(`${supabaseUrl}/rest/v1/rpc/ensure_user_exists`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'apikey': serviceKey,
+        'Authorization': `Bearer ${serviceKey}`
+      },
+      body: JSON.stringify({
+        user_email: email,
+        netlify_user_id: netlify_id || null
+      })
     });
 
-    if (error) {
-      console.error('Error syncing user:', error);
-      return new Response(JSON.stringify({ error: error.message }), {
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error('Supabase error:', errorText);
+      return new Response(JSON.stringify({ error: errorText }), {
         status: 500,
         headers: { 'Content-Type': 'application/json' }
       });
     }
 
+    const userId = await response.json();
+
     return new Response(JSON.stringify({ 
       success: true, 
-      user_id: data 
+      user_id: userId 
     }), {
       status: 200,
       headers: { 'Content-Type': 'application/json' }

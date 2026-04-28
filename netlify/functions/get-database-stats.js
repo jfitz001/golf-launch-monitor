@@ -1,82 +1,68 @@
-// Get database statistics
-import { createClient } from '@supabase/supabase-js';
-
+// Get database stats for admin - using REST API
 export default async (req, context) => {
   if (req.method !== 'GET') {
     return new Response('Method not allowed', { status: 405 });
   }
 
   try {
-    // Initialize Supabase with service role key
-    const projectKey = process.env.PROJECT_KEY || context.env?.PROJECT_KEY;
-    const supabaseUrl = projectKey ? `https://${projectKey}.supabase.co` : null;
-    const supabaseServiceKey = process.env.SERVICE_ROLE_KEY || context.env?.SERVICE_ROLE_KEY;
+    const projectKey = process.env.PROJECT_KEY;
+    const serviceKey = process.env.SERVICE_ROLE_KEY;
 
-    if (!supabaseUrl || !supabaseServiceKey) {
+    if (!projectKey || !serviceKey) {
       return new Response(JSON.stringify({ error: 'Supabase not configured' }), {
         status: 500,
         headers: { 'Content-Type': 'application/json' }
       });
     }
 
-    const supabase = createClient(supabaseUrl, supabaseServiceKey);
+    const supabaseUrl = `https://${projectKey}.supabase.co`;
+    const headers = {
+      'Content-Type': 'application/json',
+      'apikey': serviceKey,
+      'Authorization': `Bearer ${serviceKey}`,
+      'Prefer': 'count=exact'
+    };
 
-    // Get total users
-    const { count: totalUsers, error: usersError } = await supabase
-      .from('users')
-      .select('*', { count: 'exact', head: true });
+    // Get user count
+    const usersRes = await fetch(`${supabaseUrl}/rest/v1/users?select=id`, { 
+      headers: { ...headers, 'Prefer': 'count=exact' }
+    });
+    const userCount = parseInt(usersRes.headers.get('content-range')?.split('/')[1] || '0');
 
-    // Get total sessions
-    const { count: totalSessions, error: sessionsError } = await supabase
-      .from('golf_sessions')
-      .select('*', { count: 'exact', head: true });
+    // Get session count
+    const sessionsRes = await fetch(`${supabaseUrl}/rest/v1/golf_sessions?select=id,created_at`, { 
+      headers: { ...headers, 'Prefer': 'count=exact' }
+    });
+    const sessionCount = parseInt(sessionsRes.headers.get('content-range')?.split('/')[1] || '0');
 
-    // Get sessions from today
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    
-    const { count: sessionsToday, error: todayError } = await supabase
-      .from('golf_sessions')
-      .select('*', { count: 'exact', head: true })
-      .gte('created_at', today.toISOString());
+    // Get today's sessions
+    const today = new Date().toISOString().split('T')[0];
+    const todayRes = await fetch(
+      `${supabaseUrl}/rest/v1/golf_sessions?created_at=gte.${today}&select=id`, 
+      { headers: { ...headers, 'Prefer': 'count=exact' } }
+    );
+    const todayCount = parseInt(todayRes.headers.get('content-range')?.split('/')[1] || '0');
 
-    // Get sessions from this month
-    const firstDayOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
-    
-    const { count: sessionsMonth, error: monthError } = await supabase
-      .from('golf_sessions')
-      .select('*', { count: 'exact', head: true })
-      .gte('created_at', firstDayOfMonth.toISOString());
+    // Get this month's sessions
+    const monthStart = new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString();
+    const monthRes = await fetch(
+      `${supabaseUrl}/rest/v1/golf_sessions?created_at=gte.${monthStart}&select=id`, 
+      { headers: { ...headers, 'Prefer': 'count=exact' } }
+    );
+    const monthCount = parseInt(monthRes.headers.get('content-range')?.split('/')[1] || '0');
 
-    // Get recent sessions
-    const { data: recentSessions, error: recentError } = await supabase
-      .from('golf_sessions')
-      .select('id, club_type, created_at, shot_count')
-      .order('created_at', { ascending: false })
-      .limit(10);
-
-    // Get database size (approximate)
-    // Note: This requires a custom function in Supabase or admin API access
-    // For now, we'll estimate based on session count
-    const estimatedSizeKB = (totalSessions || 0) * 50; // Rough estimate: 50KB per session
-
-    return new Response(JSON.stringify({
+    return new Response(JSON.stringify({ 
       success: true,
       stats: {
-        totalUsers: totalUsers || 0,
-        totalSessions: totalSessions || 0,
-        sessionsToday: sessionsToday || 0,
-        sessionsMonth: sessionsMonth || 0,
-        estimatedSizeMB: (estimatedSizeKB / 1024).toFixed(2),
-        recentSessions: recentSessions || [],
-        timestamp: new Date().toISOString()
+        totalUsers: userCount,
+        totalSessions: sessionCount,
+        sessionsToday: todayCount,
+        sessionsMonth: monthCount,
+        estimatedSizeMB: (sessionCount * 0.01).toFixed(2)
       }
     }), {
       status: 200,
-      headers: {
-        'Content-Type': 'application/json',
-        'Cache-Control': 'no-cache'
-      }
+      headers: { 'Content-Type': 'application/json' }
     });
   } catch (error) {
     console.error('Get database stats error:', error);

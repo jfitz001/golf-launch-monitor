@@ -701,6 +701,8 @@ function groupShotsByClub(shots) {
 // Display automatic insights (no API needed) - PER CLUB
 function displayAutomaticInsights() {
     const insightsDiv = document.getElementById('insights');
+    if (!insightsDiv) return; // Not on this page
+    
     const clubGroups = groupShotsByClub(golfData);
     const clubs = Object.keys(clubGroups).sort();
     

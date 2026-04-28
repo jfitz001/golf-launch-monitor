@@ -1,6 +1,4 @@
-// Save golf session to Supabase database
-import { createClient } from '@supabase/supabase-js';
-
+// Save golf session to Supabase - using REST API
 export default async (req, context) => {
   if (req.method !== 'POST') {
     return new Response('Method not allowed', { status: 405 });
@@ -10,63 +8,59 @@ export default async (req, context) => {
     const { session, userEmail } = await req.json();
     
     if (!session || !userEmail) {
-      return new Response(JSON.stringify({ error: 'Session data and email required' }), {
+      return new Response(JSON.stringify({ error: 'Session and email required' }), {
         status: 400,
         headers: { 'Content-Type': 'application/json' }
       });
     }
 
-    // Initialize Supabase with service role key
-    const projectKey = process.env.PROJECT_KEY || context.env?.PROJECT_KEY;
-    const supabaseUrl = projectKey ? `https://${projectKey}.supabase.co` : null;
-    const supabaseServiceKey = process.env.SERVICE_ROLE_KEY || context.env?.SERVICE_ROLE_KEY;
+    const projectKey = process.env.PROJECT_KEY;
+    const serviceKey = process.env.SERVICE_ROLE_KEY;
 
-    console.log('Save session - Supabase config:', {
-      hasProjectKey: !!projectKey,
-      hasServiceKey: !!supabaseServiceKey
-    });
-
-    if (!supabaseUrl || !supabaseServiceKey) {
-      const missing = [];
-      if (!projectKey) missing.push('PROJECT_KEY');
-      if (!supabaseServiceKey) missing.push('SERVICE_ROLE_KEY');
-      return new Response(JSON.stringify({ 
-        error: 'Supabase not configured',
-        missing: missing,
-        hint: 'Set PROJECT_KEY and SERVICE_ROLE_KEY in Netlify Environment Variables'
-      }), {
+    if (!projectKey || !serviceKey) {
+      return new Response(JSON.stringify({ error: 'Supabase not configured' }), {
         status: 500,
         headers: { 'Content-Type': 'application/json' }
       });
     }
 
-    const supabase = createClient(supabaseUrl, supabaseServiceKey);
+    const supabaseUrl = `https://${projectKey}.supabase.co`;
+    const headers = {
+      'Content-Type': 'application/json',
+      'apikey': serviceKey,
+      'Authorization': `Bearer ${serviceKey}`,
+      'Prefer': 'return=representation'
+    };
 
-    // First, ensure user exists and get their ID
-    const { data: userId, error: userError } = await supabase.rpc('ensure_user_exists', {
-      user_email: userEmail,
-      netlify_user_id: null
+    // Ensure user exists
+    const userRes = await fetch(`${supabaseUrl}/rest/v1/rpc/ensure_user_exists`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ user_email: userEmail, netlify_user_id: null })
     });
 
-    if (userError) {
-      console.error('Error ensuring user exists:', userError);
-      return new Response(JSON.stringify({ error: userError.message }), {
+    if (!userRes.ok) {
+      const errorText = await userRes.text();
+      return new Response(JSON.stringify({ error: errorText }), {
         status: 500,
         headers: { 'Content-Type': 'application/json' }
       });
     }
 
-    // Calculate stats from session data
+    const userId = await userRes.json();
+
+    // Calculate stats
     const carryDistances = session.data.map(s => parseFloat(s['Carry Distance']) || 0).filter(d => d > 0);
     const avgCarry = carryDistances.length > 0 ? carryDistances.reduce((a,b) => a+b, 0) / carryDistances.length : 0;
     const bestShot = carryDistances.length > 0 ? Math.max(...carryDistances) : 0;
     const stdDev = carryDistances.length > 1 ? Math.sqrt(carryDistances.map(x => Math.pow(x - avgCarry, 2)).reduce((a, b) => a + b) / carryDistances.length) : 0;
     const consistency = avgCarry > 0 ? Math.max(0, 100 - (stdDev / avgCarry * 100)) : 0;
 
-    // Insert session into database
-    const { data: sessionData, error: insertError } = await supabase
-      .from('golf_sessions')
-      .insert({
+    // Insert session
+    const insertRes = await fetch(`${supabaseUrl}/rest/v1/golf_sessions`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({
         user_id: userId,
         club_type: session.name || 'Unknown',
         shot_count: session.data.length,
@@ -77,20 +71,21 @@ export default async (req, context) => {
         swing_grade: session.swingScore?.description || 'Good',
         session_data: session.data
       })
-      .select()
-      .single();
+    });
 
-    if (insertError) {
-      console.error('Error inserting session:', insertError);
-      return new Response(JSON.stringify({ error: insertError.message }), {
+    if (!insertRes.ok) {
+      const errorText = await insertRes.text();
+      return new Response(JSON.stringify({ error: errorText }), {
         status: 500,
         headers: { 'Content-Type': 'application/json' }
       });
     }
 
+    const savedSession = await insertRes.json();
+
     return new Response(JSON.stringify({ 
       success: true, 
-      session: sessionData 
+      session: savedSession[0] 
     }), {
       status: 200,
       headers: { 'Content-Type': 'application/json' }
