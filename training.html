@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta charset="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Training - Golf Analytics</title>
     <link rel="stylesheet" href="styles.css">
     <link rel="stylesheet" href="styles-auth.css">
@@ -61,6 +61,7 @@
                     <a href="/analysis" class="nav-link">Analysis</a>
                     <a href="/training" class="nav-link active">Training</a>
                     <a href="/data" class="nav-link">Data</a>
+                    <a href="/settings" class="nav-link">Settings</a>
                     <a href="/admin" class="nav-link" id="admin-link" style="display: none;">Admin</a>
                 </nav>
             </header>
@@ -100,7 +101,7 @@
     <script src="auth.js"></script>
     <script>
         // Check if data exists
-        window.addEventListener('load', () => {
+        window.addEventListener('load', async () => {
             const savedData = localStorage.getItem('currentGolfData');
             if (savedData && savedData !== '[]') {
                 golfData = JSON.parse(savedData);
@@ -109,7 +110,7 @@
                 
                 // Generate training drills
                 const insights = analyzeGolfData(golfData);
-                updateDrills(insights);
+                await updateDrills(insights, { aiFirst: true });
             } else {
                 document.getElementById('dataLoaded').style.display = 'none';
                 document.getElementById('noData').classList.remove('hidden');

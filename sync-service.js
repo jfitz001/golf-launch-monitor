@@ -54,6 +54,13 @@ class SyncService {
     }
     
     addToQueue(operation) {
+        // Keep only newest snapshot for working dataset sync
+        if (operation.type === 'upsert-working-data' && operation.data?.userEmail) {
+            this.syncQueue = this.syncQueue.filter(item =>
+                !(item.type === 'upsert-working-data' && item.data?.userEmail === operation.data.userEmail)
+            );
+        }
+
         this.syncQueue.push({
             ...operation,
             timestamp: Date.now(),
@@ -104,6 +111,8 @@ class SyncService {
                 return await this.syncSaveSession(operation.data);
             case 'delete-session':
                 return await this.syncDeleteSession(operation.data);
+            case 'upsert-working-data':
+                return await this.syncUpsertWorkingData(operation.data);
             default:
                 console.warn('Unknown operation type:', operation.type);
         }
@@ -142,6 +151,24 @@ class SyncService {
             throw new Error('Failed to delete session');
         }
         
+        return await response.json();
+    }
+
+    async syncUpsertWorkingData(data) {
+        const inviteHeaders = typeof window.getInviteAuthHeaders === 'function'
+            ? window.getInviteAuthHeaders()
+            : {};
+
+        const response = await fetch('/.netlify/functions/upsert-working-data', {
+            method: 'POST',
+            headers: { ...inviteHeaders, 'Content-Type': 'application/json' },
+            body: JSON.stringify(data)
+        });
+
+        if (!response.ok) {
+            throw new Error('Failed to sync working data');
+        }
+
         return await response.json();
     }
     

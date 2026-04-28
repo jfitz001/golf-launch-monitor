@@ -1,0 +1,11 @@
+- generic [ref=e3]:
+  - heading "Golf Launch Monitor" [level=2] [ref=e4]
+  - paragraph [ref=e5]: Sign in to manage your profile
+  - generic [ref=e6]:
+    - generic [ref=e7]: Invite Access Code
+    - generic [ref=e8]:
+      - textbox "Invite Access Code" [disabled] [ref=e9]:
+        - /placeholder: Enter join code
+      - button "Unlock" [disabled] [ref=e10] [cursor=pointer]
+    - paragraph [ref=e11]: No invite link loaded. Admin can sign in. Others need invite link + code.
+  - button "Sign In / Sign Up" [ref=e12] [cursor=pointer]

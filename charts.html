@@ -62,12 +62,21 @@
                     <a href="/analysis" class="nav-link">Analysis</a>
                     <a href="/training" class="nav-link">Training</a>
                     <a href="/data" class="nav-link">Data</a>
+                    <a href="/settings" class="nav-link">Settings</a>
                     <a href="/admin" class="nav-link" id="admin-link" style="display: none;">Admin</a>
                 </nav>
             </header>
 
             <div id="dataLoaded" class="hidden">
                 <div class="charts-grid">
+                    <div class="chart-card">
+                        <h3>All Clubs: Face-to-Path vs Offline</h3>
+                        <p style="margin: -8px 0 12px; font-size: 13px; color: var(--text-secondary);">Color by club. Toggle clubs in legend.</p>
+                        <div id="allClubsFacePathLegend" class="club-filter-legend"></div>
+                        <div style="height: 360px; margin-top: 10px;">
+                            <canvas id="allClubsFacePathChart"></canvas>
+                        </div>
+                    </div>
                     <div class="chart-card dispersion-chart">
                         <h3>Shot Dispersion (Driving Range View)</h3>
                         <canvas id="dispersionChart"></canvas>
@@ -169,6 +178,7 @@
                 createDirectionChart();
                 createApexChart();
                 createGappingChart();
+                renderAllClubsFacePathModule('allClubsFacePathChart', 'allClubsFacePathLegend', golfData);
             } else {
                 document.getElementById('dataLoaded').style.display = 'none';
                 document.getElementById('noData').classList.remove('hidden');

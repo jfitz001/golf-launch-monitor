@@ -265,8 +265,10 @@ function showAuth() {
         appSection.style.display = 'none';
     }
 
-    if (!inviteState.validated) {
+    if (!inviteState.validated && getInviteLinkKey()) {
         setLoginAvailability(false);
+    } else {
+        setLoginAvailability(true);
     }
 
     localStorage.removeItem('netlify_token');

@@ -1,23 +1,27 @@
 /* Data Table Styles */
 .nav-link {
     display: inline-block;
-    padding: 8px 16px;
-    margin-right: 12px;
-    color: var(--text-secondary);
+    padding: 10px 18px;
+    margin-right: 8px;
+    color: rgba(255, 255, 255, 0.92);
     text-decoration: none;
-    border-radius: 8px;
+    border-radius: 10px;
     transition: all 0.2s;
     font-size: 14px;
+    font-weight: 600;
+    background: rgba(255, 255, 255, 0.12);
+    border: 1px solid rgba(255, 255, 255, 0.2);
 }
 
 .nav-link:hover {
-    color: var(--text);
-    background: var(--surface-light);
+    color: white;
+    background: rgba(255, 255, 255, 0.2);
 }
 
 .nav-link.active {
-    color: white;
-    background: linear-gradient(135deg, var(--gradient-start), var(--gradient-end));
+    color: var(--primary-dark);
+    background: #f7f7f3;
+    border-color: transparent;
 }
 
 .table-controls {
@@ -58,7 +62,7 @@
 }
 
 .data-table thead {
-    background: var(--surface-light);
+    background: #e7efe9;
     position: sticky;
     top: 0;
     z-index: 10;
@@ -67,8 +71,8 @@
 .data-table th {
     padding: 12px;
     text-align: left;
-    font-weight: 600;
-    color: var(--text);
+    font-weight: 700;
+    color: #11271f;
     border-bottom: 2px solid var(--border);
     white-space: nowrap;
 }
@@ -76,7 +80,7 @@
 .data-table td {
     padding: 12px;
     border-bottom: 1px solid var(--border);
-    color: var(--text-secondary);
+    color: #28453a;
 }
 
 .data-table tbody tr {

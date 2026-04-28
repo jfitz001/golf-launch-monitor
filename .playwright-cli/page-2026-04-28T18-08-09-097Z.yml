@@ -1,0 +1,11 @@
+- generic [ref=e3]:
+  - heading "Golf Launch Monitor" [level=2] [ref=e4]
+  - paragraph [ref=e5]: Sign in to save your data and access from anywhere
+  - generic [ref=e6]:
+    - generic [ref=e7]: Invite Access Code
+    - generic [ref=e8]:
+      - textbox "Invite Access Code" [ref=e9]:
+        - /placeholder: Enter join code
+      - button "Unlock" [ref=e10] [cursor=pointer]
+    - paragraph [ref=e11]: Enter join code to unlock this invite link.
+  - button "Sign In / Sign Up" [disabled] [ref=e12]

@@ -37,8 +37,85 @@ async function checkUserRateLimit(endpoint = 'app-action') {
     }
 }
 
+function getInviteHeaders(baseHeaders = {}) {
+    if (typeof window.getInviteAuthHeaders === 'function') {
+        return window.getInviteAuthHeaders(baseHeaders);
+    }
+    return { ...baseHeaders };
+}
+
+function getCurrentUserEmail() {
+    const currentUser = netlifyIdentity?.currentUser?.();
+    return currentUser?.email ? String(currentUser.email).trim().toLowerCase() : '';
+}
+
+async function fetchWorkingDataFromCloud(userEmail = getCurrentUserEmail()) {
+    if (!userEmail) {
+        return { success: false, reason: 'no-user' };
+    }
+
+    const response = await fetch(`/.netlify/functions/get-working-data?email=${encodeURIComponent(userEmail)}`, {
+        headers: getInviteHeaders()
+    });
+
+    if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(errorText || 'Failed to load cloud working data');
+    }
+
+    return response.json();
+}
+
+async function upsertWorkingDataToCloud(workingData, options = {}) {
+    const { queueIfOffline = true } = options;
+    const userEmail = getCurrentUserEmail();
+    if (!userEmail) {
+        return { success: false, reason: 'no-user' };
+    }
+
+    const payload = {
+        userEmail,
+        workingData: Array.isArray(workingData) ? workingData : []
+    };
+
+    if (queueIfOffline && window.syncService && !window.syncService.isOnline) {
+        window.syncService.addToQueue({
+            type: 'upsert-working-data',
+            data: payload
+        });
+        return { success: true, queued: true };
+    }
+
+    try {
+        const response = await fetch('/.netlify/functions/upsert-working-data', {
+            method: 'POST',
+            headers: getInviteHeaders({ 'Content-Type': 'application/json' }),
+            body: JSON.stringify(payload)
+        });
+
+        if (!response.ok) {
+            throw new Error(await response.text());
+        }
+
+        const result = await response.json();
+        return { success: true, queued: false, ...result };
+    } catch (error) {
+        if (queueIfOffline && window.syncService) {
+            window.syncService.addToQueue({
+                type: 'upsert-working-data',
+                data: payload
+            });
+            return { success: true, queued: true, error: error.message };
+        }
+        throw error;
+    }
+}
+
+window.fetchWorkingDataFromCloud = fetchWorkingDataFromCloud;
+window.upsertWorkingDataToCloud = upsertWorkingDataToCloud;
+
 // Check if user is admin and show admin link
-window.addEventListener('load', () => {
+window.addEventListener('load', async () => {
     const user = netlifyIdentity?.currentUser();
     if (user && user.email === 'jamiefitzgerald001@gmail.com') {
         const adminLink = document.getElementById('admin-link');
@@ -49,6 +126,39 @@ window.addEventListener('load', () => {
     const summary = document.getElementById('uploadSummary');
     if (summary && existingShots.length > 0) {
         summary.textContent = `Current session: ${existingShots.length} shots loaded. Upload more CSV files to append.`;
+    }
+
+    if (existingShots.length === 0) {
+        try {
+            const cloudData = await fetchWorkingDataFromCloud();
+            if (cloudData?.success && cloudData?.hasData && Array.isArray(cloudData.workingData) && cloudData.workingData.length > 0) {
+                golfData = cloudData.workingData;
+                window.golfData = cloudData.workingData;
+                localStorage.setItem('currentGolfData', JSON.stringify(cloudData.workingData));
+                localStorage.setItem('golfData', JSON.stringify(cloudData.workingData));
+                localStorage.setItem('lastUploadTime', Date.now().toString());
+
+                const dataLoaded = document.getElementById('dataLoaded');
+                const noData = document.getElementById('noData');
+                if (dataLoaded) dataLoaded.classList.remove('hidden');
+                if (noData) noData.style.display = 'none';
+
+                if (summary) {
+                    summary.textContent = `Loaded ${cloudData.workingData.length} cloud-synced shots`;
+                }
+
+                if (typeof displayData === 'function') {
+                    displayData();
+                }
+
+                if (document.getElementById('drills') && typeof analyzeGolfData === 'function') {
+                    const insights = analyzeGolfData(golfData);
+                    void updateDrills(insights, { aiFirst: true });
+                }
+            }
+        } catch (error) {
+            console.warn('Cloud working data load skipped:', error.message || error);
+        }
     }
 });
 
@@ -175,6 +285,8 @@ async function processFiles(files) {
         localStorage.setItem('golfData', JSON.stringify(mergedShots));
         localStorage.setItem('lastUploadTime', Date.now().toString());
 
+        await upsertWorkingDataToCloud(mergedShots, { queueIfOffline: true });
+
         const dedupedCount = (existingShots.length + newShots.length) - mergedShots.length;
         updateUploadSummary(validFiles.length, newShots.length, mergedShots.length, dedupedCount);
 
@@ -249,6 +361,7 @@ function displayData() {
     createDirectionChart();
     createApexChart();
     createGappingChart();
+    renderAllClubsFacePathModule();
     
     // Run pure JS analysis
     displayAutomaticInsights();
@@ -836,7 +949,7 @@ function displayAutomaticInsights() {
     
     // Update drills based on overall analysis
     const overallInsights = analyzeGolfData(golfData);
-    updateDrills(overallInsights);
+    void updateDrills(overallInsights, { aiFirst: true });
 }
 
 function renderOverallSummary(allShots, clubCount) {
@@ -962,22 +1075,26 @@ function renderClubAnalysis(clubName, clubShots) {
 // Add Face-to-path scatter chart and detailed club summary table
 function addFacePathChartAndSummary(allShots, clubGroups) {
     const insightsDiv = document.getElementById('insights');
-    
-    // Build face-to-path scatter chart
+    if (!insightsDiv) return;
+    const existingPanel = document.getElementById('facePathAnalysisPanel');
+    if (existingPanel) existingPanel.remove();
+
     const chartId = 'facePathScatterChart';
+    const legendId = 'facePathScatterLegend';
     const chartHTML = `
+        <div id="facePathAnalysisPanel">
         <div style="background: white; border: 1px solid #e2e8f0; border-radius: 16px; padding: 32px; margin-top: 24px; box-shadow: 0 1px 3px rgba(0,0,0,0.05);">
-            <h3 style="margin: 0; font-size: 18px; font-weight: 700; color: #0f172a;">Face-to-path vs Offline</h3>
-            <p style="margin: 4px 0 20px 0; color: #64748b; font-size: 14px;">Key relationship for the right miss. Higher positive face-to-path often leaks right.</p>
-            <div style="height: 400px; position: relative;"><canvas id="${chartId}"></canvas></div>
+            <h3 style="margin: 0; font-size: 18px; font-weight: 700; color: #0f172a;">All Clubs: Face-to-path vs Offline</h3>
+            <p style="margin: 4px 0 16px 0; color: #64748b; font-size: 14px;">Color coded by club. Use legend chips to toggle clubs on/off.</p>
+            <div id="${legendId}" class="club-filter-legend"></div>
+            <div style="height: 400px; position: relative; margin-top: 12px;"><canvas id="${chartId}"></canvas></div>
         </div>
         ${renderClubSummaryTable(clubGroups)}
+        </div>
     `;
-    
+
     insightsDiv.insertAdjacentHTML('beforeend', chartHTML);
-    
-    // Render the scatter chart
-    setTimeout(() => renderFacePathScatter(chartId, allShots, clubGroups), 100);
+    setTimeout(() => renderAllClubsFacePathChart(chartId, legendId, allShots), 100);
 }
 
 const CLUB_COLORS = {
@@ -993,34 +1110,62 @@ function getClubColor(club) {
     return CLUB_COLORS[club] || '#64748b';
 }
 
-function renderFacePathScatter(canvasId, allShots, clubGroups) {
+function getFacePathVisibilityState() {
+    try {
+        const saved = localStorage.getItem('facePathClubVisibility');
+        if (!saved) return {};
+        const parsed = JSON.parse(saved);
+        return parsed && typeof parsed === 'object' ? parsed : {};
+    } catch (error) {
+        return {};
+    }
+}
+
+function saveFacePathVisibilityState(state) {
+    localStorage.setItem('facePathClubVisibility', JSON.stringify(state));
+}
+
+function renderAllClubsFacePathChart(canvasId, legendId, allShots) {
     const canvas = document.getElementById(canvasId);
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
-    
-    // Build datasets per club
-    const datasets = Object.keys(clubGroups).map(club => ({
-        label: club,
-        data: clubGroups[club].map(s => {
-            const path = parseFloat(s['Club Path']) || 0;
-            const face = parseFloat(s['Club Face']) || 0;
-            const offline = parseFloat(s['Carry Deviation Distance']) || 0;
-            return { x: face - path, y: offline };
-        }).filter(d => !isNaN(d.x) && !isNaN(d.y) && (d.x !== 0 || d.y !== 0)),
-        backgroundColor: getClubColor(club),
-        borderColor: getClubColor(club),
-        pointRadius: 5,
-        pointHoverRadius: 7
-    })).filter(d => d.data.length > 0);
-    
-    new Chart(ctx, {
+    const clubGroups = groupShotsByClub(allShots || []);
+    const visibilityState = getFacePathVisibilityState();
+
+    const allClubDatasets = Object.keys(clubGroups)
+        .sort()
+        .map(club => ({
+            club,
+            points: clubGroups[club].map(s => {
+                const path = parseFloat(s['Club Path']);
+                const face = parseFloat(s['Club Face']);
+                const offline = parseFloat(s['Carry Deviation Distance']);
+                return { x: face - path, y: offline };
+            }).filter(d => Number.isFinite(d.x) && Number.isFinite(d.y))
+        }))
+        .filter(item => item.points.length > 0);
+
+    const visibleDatasets = allClubDatasets
+        .filter(item => visibilityState[item.club] !== false)
+        .map(item => ({
+            label: item.club,
+            data: item.points,
+            backgroundColor: getClubColor(item.club),
+            borderColor: getClubColor(item.club),
+            pointRadius: 5,
+            pointHoverRadius: 7
+        }));
+
+    if (charts[canvasId]) charts[canvasId].destroy();
+
+    charts[canvasId] = new Chart(ctx, {
         type: 'scatter',
-        data: { datasets },
+        data: { datasets: visibleDatasets },
         options: {
             responsive: true,
             maintainAspectRatio: false,
             plugins: {
-                legend: { position: 'top', labels: { color: '#0f172a', font: { size: 12 } } },
+                legend: { display: false },
                 tooltip: {
                     callbacks: {
                         label: (ctx) => `${ctx.dataset.label}: F2P ${ctx.parsed.x.toFixed(1)}°, Offline ${ctx.parsed.y.toFixed(1)} yd`
@@ -1041,7 +1186,39 @@ function renderFacePathScatter(canvasId, allShots, clubGroups) {
             }
         }
     });
+
+    const legend = document.getElementById(legendId);
+    if (legend) {
+        const chips = allClubDatasets.map(item => {
+            const enabled = visibilityState[item.club] !== false;
+            return `<button type="button" class="club-filter-chip ${enabled ? 'is-on' : 'is-off'}" data-club="${item.club}">
+                <span class="club-dot" style="background:${getClubColor(item.club)}"></span>
+                <span>${item.club}</span>
+                <strong>${item.points.length}</strong>
+            </button>`;
+        }).join('');
+
+        legend.innerHTML = chips || '<div class="club-filter-empty">No club/path/face data available.</div>';
+
+        legend.querySelectorAll('.club-filter-chip').forEach((button) => {
+            button.addEventListener('click', () => {
+                const club = button.dataset.club;
+                if (!club) return;
+                const nextState = getFacePathVisibilityState();
+                nextState[club] = !(nextState[club] !== false);
+                saveFacePathVisibilityState(nextState);
+                renderAllClubsFacePathChart(canvasId, legendId, allShots);
+            });
+        });
+    }
 }
+
+function renderAllClubsFacePathModule(canvasId = 'allClubsFacePathChart', legendId = 'allClubsFacePathLegend', shots = golfData) {
+    if (!Array.isArray(shots) || shots.length === 0) return;
+    renderAllClubsFacePathChart(canvasId, legendId, shots);
+}
+
+window.renderAllClubsFacePathModule = renderAllClubsFacePathModule;
 
 function renderClubSummaryTable(clubGroups) {
     const rows = Object.keys(clubGroups).map(club => {
@@ -1131,215 +1308,523 @@ function renderClubSummaryTable(clubGroups) {
     return html;
 }
 
-function updateDrills(insights) {
-    const drillsDiv = document.getElementById('drills');
-    const drillsContent = drillsDiv.querySelector('.drills-content');
-    
-    // Comprehensive drill database with detailed instructions
-    const drillDatabase = {
-        'slice': {
-            title: 'Inside-Out Path Correction',
-            desc: 'Place alignment stick or headcover 6" outside target line. Swing without hitting it. Forces inside path.',
-            reps: '10 swings, 3 sets',
-            focus: 'Feel club approaching from inside',
-            priority: 10
+function average(values) {
+    if (!Array.isArray(values) || values.length === 0) return 0;
+    return values.reduce((sum, value) => sum + value, 0) / values.length;
+}
+
+function standardDeviation(values) {
+    if (!Array.isArray(values) || values.length < 2) return 0;
+    const avg = average(values);
+    const variance = average(values.map(v => (v - avg) ** 2));
+    return Math.sqrt(variance);
+}
+
+function summarizeShots(shots = []) {
+    const offlineAbs = shots
+        .map(s => Math.abs(parseFloat(s['Carry Deviation Distance'])))
+        .filter(Number.isFinite);
+    const faceToPath = shots
+        .map(s => parseFloat(s['Club Face']) - parseFloat(s['Club Path']))
+        .filter(Number.isFinite);
+    const smash = shots
+        .map(s => parseFloat(s['Smash Factor']))
+        .filter(Number.isFinite);
+    const launch = shots
+        .map(s => parseFloat(s['Launch Angle']))
+        .filter(Number.isFinite);
+
+    return {
+        avgOfflineAbs: average(offlineAbs),
+        faceToPathStd: standardDeviation(faceToPath),
+        avgSmash: average(smash),
+        avgLaunch: average(launch)
+    };
+}
+
+function percentageChange(previous, latest) {
+    if (!Number.isFinite(previous) || !Number.isFinite(latest) || previous === 0) return null;
+    return ((latest - previous) / Math.abs(previous)) * 100;
+}
+
+function getTrendStatus(changePct, betterWhen = 'lower', threshold = 4) {
+    if (!Number.isFinite(changePct)) return 'flat';
+    const signed = betterWhen === 'lower' ? -changePct : changePct;
+    if (signed >= threshold) return 'improving';
+    if (signed <= -threshold) return 'regressing';
+    return 'flat';
+}
+
+function formatTrendText(label, changePct, status) {
+    if (!Number.isFinite(changePct)) return `${label}: not enough trend data yet.`;
+    const direction = changePct > 0 ? 'up' : 'down';
+    return `${label}: ${Math.abs(changePct).toFixed(1)}% ${direction} (${status}).`;
+}
+
+async function loadRecentSessionsForTraining() {
+    if (typeof loadSessions === 'function') {
+        try {
+            const sessions = await loadSessions();
+            if (Array.isArray(sessions)) return sessions;
+        } catch (error) {
+            console.warn('Session load for training trend failed:', error);
+        }
+    }
+
+    try {
+        const local = JSON.parse(localStorage.getItem('savedSessions') || '[]');
+        return Array.isArray(local) ? local : [];
+    } catch (error) {
+        return [];
+    }
+}
+
+async function buildTrainingTrendContext() {
+    const sessions = await loadRecentSessionsForTraining();
+    const valid = sessions.filter(s => Array.isArray(s?.data) && s.data.length > 0);
+    const latest = valid.slice(0, 3);
+    const previous = valid.slice(3, 6);
+
+    const latestMetrics = summarizeShots(latest.flatMap(s => s.data || []));
+    const previousMetrics = summarizeShots(previous.flatMap(s => s.data || []));
+
+    const metrics = {
+        offline: {
+            changePct: percentageChange(previousMetrics.avgOfflineAbs, latestMetrics.avgOfflineAbs),
+            status: getTrendStatus(percentageChange(previousMetrics.avgOfflineAbs, latestMetrics.avgOfflineAbs), 'lower'),
+            text: ''
         },
-        'hook': {
-            title: 'Face Control Awareness',
-            desc: 'Grip pressure at 4/10. Practice half swings focusing on square face at impact. Use mirror for feedback.',
-            reps: '20 half swings',
-            focus: 'Lighter grip prevents early release',
-            priority: 10
+        facePathVariance: {
+            changePct: percentageChange(previousMetrics.faceToPathStd, latestMetrics.faceToPathStd),
+            status: getTrendStatus(percentageChange(previousMetrics.faceToPathStd, latestMetrics.faceToPathStd), 'lower'),
+            text: ''
         },
-        'path-face': {
-            title: 'Gate Drill for Path-Face Match',
-            desc: 'Create 18" gate with alignment sticks. Swing through gate with square face. Trains coordination.',
-            reps: '15 swings, record path/face data',
-            focus: 'Face angle matches path angle',
-            priority: 9
+        smash: {
+            changePct: percentageChange(previousMetrics.avgSmash, latestMetrics.avgSmash),
+            status: getTrendStatus(percentageChange(previousMetrics.avgSmash, latestMetrics.avgSmash), 'higher'),
+            text: ''
         },
-        'path-out-to-in': {
-            title: 'Alignment Stick Behind Ball',
-            desc: 'Stick angled 45° behind ball (inside). Prevents over-the-top. Swing under stick.',
-            reps: '12 swings, 2 sets',
-            focus: 'Shallow from inside',
-            priority: 9
-        },
-        'path-in-to-out': {
-            title: 'Square Path Training',
-            desc: 'Gate drill with tight tolerances. Practice neutral path. Prevent excessive draw.',
-            reps: '10 swings through gate',
-            focus: 'Neutral 0-2° path',
-            priority: 7
-        },
-        'launch-low': {
-            title: 'Ball Position + Tee Height',
-            desc: 'Move ball 1-2" forward. Tee higher. Practice ascending blow. Feel hitting "up" on ball.',
-            reps: '15 shots, measure launch',
-            focus: 'Positive attack angle',
-            priority: 8
-        },
-        'launch-high': {
-            title: 'Compress Down Drill',
-            desc: 'Ball position center-back. Focus on descending strike. Divot after ball.',
-            reps: '12 shots, check divots',
-            focus: 'Ball-first contact',
-            priority: 6
-        },
-        'attack-steep': {
-            title: 'Shallow Transition Drill',
-            desc: 'Pump drill: halfway down, pause, feel club shallow. Then complete swing.',
-            reps: '8 pump drills, 8 full swings',
-            focus: 'Shallow plane in transition',
-            priority: 8
-        },
-        'attack-shallow': {
-            title: 'Compression Training',
-            desc: 'Focus on hitting down. Place tee 2" in front of ball. Try to hit both.',
-            reps: '10 swings',
-            focus: 'Descending angle of attack',
-            priority: 7
-        },
-        'smash-low': {
-            title: 'Center Strike Protocol',
-            desc: 'Impact tape on face. 20 swings. Map strike pattern. Adjust setup until centered.',
-            reps: '20 swings, adjust between sets',
-            focus: 'Sweet spot contact',
-            priority: 10
-        },
-        'smash-high': {
-            title: 'Contact Quality Check',
-            desc: 'May indicate thin strikes. Focus on solid compression. Check lie angle.',
-            reps: 'Validation shots',
-            focus: 'Center-face contact',
-            priority: 5
-        },
-        'consistency-low': {
-            title: 'Tempo & Rhythm Builder',
-            desc: '3-count tempo: 1 (backswing), 2 (transition), 3 (impact). Metronome app at 60 BPM.',
-            reps: '25 swings with count',
-            focus: 'Repeatable tempo',
-            priority: 9
-        },
-        'accuracy-poor': {
-            title: 'Alignment Station Setup',
-            desc: 'Sticks for feet, hips, shoulders. Check parallel alignment. Film from behind.',
-            reps: '10 swings with alignment check',
-            focus: 'Square setup',
-            priority: 8
-        },
-        'spin-low': {
-            title: 'Spin Enhancement',
-            desc: 'Clean grooves. New ball. Steeper attack. Focus on quality compression.',
-            reps: '15 shots, measure spin',
-            focus: 'Crisp contact, clean grooves',
-            priority: 7
-        },
-        'spin-high': {
-            title: 'Spin Reduction',
-            desc: 'Shallow attack angle. Ball forward. Reduce dynamic loft.',
-            reps: '12 shots',
-            focus: 'Lower spin loft',
-            priority: 6
-        },
-        'path-inconsistent': {
-            title: 'Path Repeatability Training',
-            desc: 'Video from down-the-line. Gate drill. Track path deviation. Reduce variance.',
-            reps: '20 swings, measure each',
-            focus: 'Path within ±2°',
-            priority: 8
-        },
-        'face-inconsistent': {
-            title: 'Face Control Mastery',
-            desc: 'Grip consistency drill. Mark grip. Check every swing. Feel square at impact.',
-            reps: '15 swings, verify face angle',
-            focus: 'Face within ±2°',
-            priority: 9
-        },
-        'efficiency-low': {
-            title: 'Speed-Distance Optimization',
-            desc: 'Focus on smash factor and launch. Quality contact + optimal launch = max distance.',
-            reps: 'Combined launch + contact drills',
-            focus: 'Smash 1.30+, launch 24-28°',
-            priority: 7
+        launch: {
+            changePct: percentageChange(previousMetrics.avgLaunch, latestMetrics.avgLaunch),
+            status: 'flat',
+            text: ''
         }
     };
-    
-    // Prioritize drills based on severity and impact
-    const scoredDrills = [];
-    
-    insights.warnings.forEach(w => {
-        if (drillDatabase[w.type]) {
-            const drill = drillDatabase[w.type];
-            let score = drill.priority;
-            
-            // Boost priority for high severity
-            if (w.severity === 'high') score += 3;
-            if (w.severity === 'medium') score += 1;
-            
-            scoredDrills.push({ ...drill, score, issue: w.message });
+
+    const launchChange = metrics.launch.changePct;
+    if (Number.isFinite(launchChange)) {
+        if (Math.abs(launchChange) <= 4) {
+            metrics.launch.status = 'flat';
+        } else if (launchChange > 0) {
+            metrics.launch.status = 'rising';
+        } else {
+            metrics.launch.status = 'falling';
         }
-    });
-    
-    // Sort by score (highest priority first)
-    scoredDrills.sort((a, b) => b.score - a.score);
-    
-    // If no specific issues, add general improvement drills
-    if (scoredDrills.length === 0) {
-        scoredDrills.push(
-            {
-                title: 'Fundamentals Check',
-                desc: 'Alignment, grip, posture, ball position. Video from face-on and down-the-line.',
-                reps: '5 swings per checkpoint',
-                focus: 'Baseline fundamentals',
-                issue: 'General improvement'
-            },
-            {
-                title: 'Consistency Builder',
-                desc: 'Same target, same club. Track dispersion. Goal: reduce spread by 20%.',
-                reps: '20 shots',
-                focus: 'Repeatable motion',
-                issue: 'Build consistency'
-            },
-            {
-                title: 'Data-Driven Practice',
-                desc: 'Pick one metric (path, face, launch). Drill until variance drops. Measure progress.',
-                reps: 'Until metric improves',
-                focus: 'One metric at a time',
-                issue: 'Targeted improvement'
-            }
-        );
     }
-    
-    // Render top 4-6 drills
-    let html = '';
-    const drillsToShow = Math.min(6, Math.max(3, scoredDrills.length));
-    
-    scoredDrills.slice(0, drillsToShow).forEach((drill, index) => {
-        const priorityColor = drill.score >= 12 ? 'var(--danger)' : 
-                             drill.score >= 9 ? 'var(--warning)' : 
-                             'var(--primary)';
+
+    metrics.offline.text = formatTrendText('Offline miss', metrics.offline.changePct, metrics.offline.status);
+    metrics.facePathVariance.text = formatTrendText('Face/path variance', metrics.facePathVariance.changePct, metrics.facePathVariance.status);
+    metrics.smash.text = formatTrendText('Smash factor', metrics.smash.changePct, metrics.smash.status);
+    metrics.launch.text = formatTrendText('Launch angle', metrics.launch.changePct, metrics.launch.status);
+
+    return {
+        sessionsAnalyzed: valid.length,
+        latestMetrics,
+        previousMetrics,
+        metrics
+    };
+}
+
+const TRAINING_PLAYBOOK = {
+    'slice': {
+        title: 'Path + Face Neutralization',
+        rootCause: 'Face is staying open to path through impact with path trending left.',
+        drillSteps: [
+            'Set one alignment stick outside ball line to block over-the-top path.',
+            'Hit 8 half-swings focusing on square face at lead-arm parallel.',
+            'Hit 8 full swings and confirm face-to-path stays near neutral.'
+        ],
+        repsSets: '3 rounds of 8+8 swings',
+        targetMetric: 'Face-to-path between -1.0° and +1.0° with average offline miss < 8 yd',
+        retestRule: 'Retest after 24 swings and compare to prior session.',
+        priority: 10,
+        club: 'Driver / Woods'
+    },
+    'hook': {
+        title: 'Face Stability Control',
+        rootCause: 'Face closing too quickly relative to club path.',
+        drillSteps: [
+            'Use 4/10 grip pressure and rehearse hold-off finish.',
+            'Hit 10 punch shots with chest facing target at impact.',
+            'Move to normal swing speed while preserving face feel.'
+        ],
+        repsSets: '2 sets of 10 punch + 10 full',
+        targetMetric: 'Club face average within ±1.5° of target',
+        retestRule: 'If face closes beyond -2°, restart with punch set.',
+        priority: 9,
+        club: 'Irons / Hybrids'
+    },
+    'path-face': {
+        title: 'Face-to-Path Match Drill',
+        rootCause: 'Face and path are not synchronized at impact.',
+        drillSteps: [
+            'Build a gate 18\" in front of ball for path control.',
+            'Hit 12 balls with identical setup and tempo.',
+            'Record face/path after each block and adjust setup only once per block.'
+        ],
+        repsSets: '3 sets of 12 balls',
+        targetMetric: 'Absolute face-to-path average under 2.0°',
+        retestRule: 'Recheck after each set; stop once 2 consecutive sets pass.',
+        priority: 9,
+        club: 'All clubs'
+    },
+    'path-out-to-in': {
+        title: 'Shallow Transition Pattern',
+        rootCause: 'Transition steepens and path cuts left.',
+        drillSteps: [
+            'Place stick angled behind ball on inside track.',
+            'Make 10 pump rehearsals to feel shallowing.',
+            'Hit 10 full swings without contacting stick.'
+        ],
+        repsSets: '3 rounds of 10 rehearsals + 10 swings',
+        targetMetric: 'Club path between -2.0° and +1.0°',
+        retestRule: 'Re-measure path after each round.',
+        priority: 9,
+        club: 'Mid irons / woods'
+    },
+    'path-in-to-out': {
+        title: 'Neutral Path Centering',
+        rootCause: 'Path is excessively in-to-out, creating over-draw risk.',
+        drillSteps: [
+            'Set two alignment rods to create neutral swing corridor.',
+            'Hit 12 balls keeping path centered in corridor.',
+            'Add target start-line constraint with intermediate target.'
+        ],
+        repsSets: '2 sets of 12 balls',
+        targetMetric: 'Club path between 0.0° and +2.0°',
+        retestRule: 'If path > +3°, reduce release and repeat.',
+        priority: 7,
+        club: 'Driver / long clubs'
+    },
+    'launch-low': {
+        title: 'Launch Window Raise',
+        rootCause: 'Ball position and attack pattern are suppressing launch.',
+        drillSteps: [
+            'Move ball 1 ball forward and raise tee height slightly.',
+            'Hit 10 shots focusing on hitting up through impact.',
+            'Keep chest tilt away from target through strike.'
+        ],
+        repsSets: '3 sets of 10 shots',
+        targetMetric: 'Average launch angle increase by 2.0°+',
+        retestRule: 'Re-check launch after each set.',
+        priority: 8,
+        club: 'Driver / fairway woods'
+    },
+    'launch-high': {
+        title: 'Launch Compression Control',
+        rootCause: 'Dynamic loft too high at impact.',
+        drillSteps: [
+            'Move ball half-ball back in stance.',
+            'Hit 12 shots with forward shaft lean feel.',
+            'Check divot starts after ball on turf shots.'
+        ],
+        repsSets: '2 sets of 12 shots',
+        targetMetric: 'Launch angle reduced toward target window',
+        retestRule: 'If launch stays high, reduce wrist extension through impact.',
+        priority: 7,
+        club: 'Irons'
+    },
+    'attack-steep': {
+        title: 'Steepness Reduction',
+        rootCause: 'Downswing plane is steep, creating strike inconsistency.',
+        drillSteps: [
+            'Perform 8 pump-drill reps from top to slot position.',
+            'Hit 8 balls with same shallow feeling.',
+            'Review attack angle after each 8-ball block.'
+        ],
+        repsSets: '3 rounds of 8+8',
+        targetMetric: 'Attack angle closer to neutral by 1.5°',
+        retestRule: 'Repeat until two rounds show improvement.',
+        priority: 8,
+        club: 'All clubs'
+    },
+    'attack-shallow': {
+        title: 'Compression Increase',
+        rootCause: 'Attack angle too shallow for current club intent.',
+        drillSteps: [
+            'Place tee 2\" ahead of ball as strike-through checkpoint.',
+            'Hit 12 swings clipping both ball then forward tee.',
+            'Keep pressure moving lead side through impact.'
+        ],
+        repsSets: '2 sets of 12 swings',
+        targetMetric: 'Attack angle moves more negative by ~1.0°',
+        retestRule: 'Re-measure after each 12-ball block.',
+        priority: 7,
+        club: 'Irons / wedges'
+    },
+    'smash-low': {
+        title: 'Center Contact Protocol',
+        rootCause: 'Strike quality off-center reducing energy transfer.',
+        drillSteps: [
+            'Apply impact spray/tape and map 10 strikes.',
+            'Adjust setup distance and posture to center pattern.',
+            'Hit 2 blocks of 10 swings and re-check strike map.'
+        ],
+        repsSets: '3 blocks of 10 swings',
+        targetMetric: 'Smash factor +0.05 improvement with centered strike cluster',
+        retestRule: 'Re-test every 10 shots; adjust setup only between blocks.',
+        priority: 10,
+        club: 'All clubs'
+    },
+    'consistency-low': {
+        title: 'Tempo Repeatability Build',
+        rootCause: 'Tempo variance is creating pattern instability.',
+        drillSteps: [
+            'Use 1-2-3 tempo cadence (backswing-transition-impact).',
+            'Hit 15 swings at 70% speed.',
+            'Hit 15 swings at full speed with same cadence.'
+        ],
+        repsSets: '2 cycles of 30 swings',
+        targetMetric: 'Offline standard deviation drops by 10%+',
+        retestRule: 'Compare spread after each cycle.',
+        priority: 9,
+        club: 'Primary gamer club first'
+    },
+    'accuracy-poor': {
+        title: 'Start-Line Accuracy Station',
+        rootCause: 'Setup alignment and start-line control are inconsistent.',
+        drillSteps: [
+            'Set body-line stick parallel left of target.',
+            'Add 2-yard start-line gate 10 yards ahead.',
+            'Hit 20 shots through gate before changing target.'
+        ],
+        repsSets: '2 sets of 20 shots',
+        targetMetric: 'Average offline miss reduced under 8 yd',
+        retestRule: 'Re-test every 20 shots and log pass rate.',
+        priority: 8,
+        club: 'All clubs'
+    },
+    'path-inconsistent': {
+        title: 'Path Variance Reduction',
+        rootCause: 'Swing direction varies shot-to-shot.',
+        drillSteps: [
+            'Film down-the-line for baseline swings.',
+            'Run gate drill and record path for 15 shots.',
+            'Repeat only if variance remains high.'
+        ],
+        repsSets: '3 sets of 15 measured swings',
+        targetMetric: 'Path standard deviation under 2.0°',
+        retestRule: 'Advance only after two passing sets.',
+        priority: 8,
+        club: 'Club with highest miss rate'
+    },
+    'face-inconsistent': {
+        title: 'Face Dispersion Control',
+        rootCause: 'Face orientation at impact varies too much.',
+        drillSteps: [
+            'Mark grip checkpoints and re-check before each swing.',
+            'Hit 12 controlled shots keeping same release feel.',
+            'Increase speed only after face control stabilizes.'
+        ],
+        repsSets: '3 sets of 12 swings',
+        targetMetric: 'Face angle standard deviation under 2.0°',
+        retestRule: 'If variance spikes, reset to 60% speed.',
+        priority: 9,
+        club: 'All clubs'
+    },
+    'efficiency-low': {
+        title: 'Speed-to-Distance Efficiency',
+        rootCause: 'Ball speed conversion from club speed is inefficient.',
+        drillSteps: [
+            'Pair center contact drill with launch check.',
+            'Hit 10 shots prioritizing strike, not speed.',
+            'Then hit 10 at normal tempo and compare smash.'
+        ],
+        repsSets: '3 rounds of 10+10 shots',
+        targetMetric: 'Smash trend rising with no launch loss',
+        retestRule: 'Re-check smash and launch after each round.',
+        priority: 7,
+        club: 'Primary distance club'
+    }
+};
+
+function getTrendMetricForWarning(type) {
+    const map = {
+        'slice': 'offline',
+        'hook': 'offline',
+        'path-face': 'facePathVariance',
+        'path-out-to-in': 'facePathVariance',
+        'path-in-to-out': 'facePathVariance',
+        'path-inconsistent': 'facePathVariance',
+        'face-inconsistent': 'facePathVariance',
+        'accuracy-poor': 'offline',
+        'smash-low': 'smash',
+        'efficiency-low': 'smash',
+        'launch-low': 'launch',
+        'launch-high': 'launch',
+        'attack-steep': 'offline',
+        'attack-shallow': 'offline'
+    };
+    return map[type] || 'offline';
+}
+
+function escapeHtml(value) {
+    return String(value)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/\"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+}
+
+async function buildTrainingAiSummary(recommendations, trendContext) {
+    const currentUser = netlifyIdentity?.currentUser?.();
+    if (!currentUser?.email) return '';
+
+    const allowed = await checkUserRateLimit('gemini-proxy');
+    if (!allowed) return '';
+
+    const compactPlan = recommendations.slice(0, 4).map((rec, index) => (
+        `${index + 1}. ${rec.title}\nIssue: ${rec.issue}\nTarget: ${rec.targetMetric}\nRetest: ${rec.retestRule}`
+    )).join('\n\n');
+
+    const prompt = `You are a golf coach.\nCreate a concise training focus summary in 4 bullet points.\n\nTrend context:\n- Offline: ${trendContext.metrics.offline.text}\n- Face/path variance: ${trendContext.metrics.facePathVariance.text}\n- Smash: ${trendContext.metrics.smash.text}\n- Launch: ${trendContext.metrics.launch.text}\n\nRecommendations:\n${compactPlan}\n\nRequirements:\n- Keep under 120 words.\n- Include one \"today focus\" bullet.\n- Include one \"stop doing\" bullet.\n- Use plain text bullets only.`;
+    const response = await fetch('/.netlify/functions/gemini-proxy', {
+        method: 'POST',
+        headers: getInviteHeaders({ 'Content-Type': 'application/json' }),
+        body: JSON.stringify({
+            userEmail: currentUser.email,
+            contents: [{
+                parts: [{ text: prompt }]
+            }]
+        })
+    });
+
+    if (!response.ok) return '';
+    const data = await response.json();
+    const text = data?.candidates?.[0]?.content?.parts?.[0]?.text || '';
+    if (!text) return '';
+    return `<div class="training-ai-summary">${escapeHtml(text).replace(/\n/g, '<br>')}</div>`;
+}
+
+async function updateDrills(insights, options = {}) {
+    const drillsRoot = document.getElementById('drills');
+    if (!drillsRoot) return;
+    const drillsContent = drillsRoot.classList.contains('drills-content')
+        ? drillsRoot
+        : drillsRoot.querySelector('.drills-content') || drillsRoot;
+
+    drillsContent.innerHTML = '<div class=\"loading\">Building personalized training plan...</div>';
+
+    const trendContext = await buildTrainingTrendContext();
+    const recommendations = [];
+
+    (insights?.warnings || []).forEach((warning) => {
+        const template = TRAINING_PLAYBOOK[warning.type];
+        if (!template) return;
+
+        const metricKey = getTrendMetricForWarning(warning.type);
+        const metricTrend = trendContext.metrics[metricKey];
+        const severityBoost = warning.severity === 'high' ? 3 : warning.severity === 'medium' ? 1 : 0;
+
+        recommendations.push({
+            issue: warning.message,
+            rootCause: template.rootCause,
+            drillSteps: template.drillSteps,
+            repsSets: template.repsSets,
+            targetMetric: template.targetMetric,
+            retestRule: template.retestRule,
+            priority: template.priority + severityBoost,
+            club: template.club,
+            title: template.title,
+            trendStatus: metricTrend?.status || 'flat',
+            trendText: metricTrend?.text || 'Trend unavailable.'
+        });
+    });
+
+    if (recommendations.length === 0) {
+        recommendations.push({
+            issue: 'No major warning patterns detected',
+            rootCause: 'Baseline quality is stable. Focus on consolidation and repeatability.',
+            drillSteps: [
+                'Run a 30-shot baseline session with your top 2 clubs.',
+                'Keep same pre-shot routine on every swing.',
+                'Track one metric only (offline or smash) for consistency.'
+            ],
+            repsSets: '2 rounds of 15 measured swings',
+            targetMetric: 'Maintain or improve consistency by 5%',
+            retestRule: 'Re-test in next saved session and compare spread.',
+            priority: 6,
+            club: 'All clubs',
+            title: 'Performance Consolidation',
+            trendStatus: trendContext.metrics.offline.status,
+            trendText: trendContext.metrics.offline.text
+        });
+    }
+
+    recommendations.sort((a, b) => b.priority - a.priority);
+    const drillsToShow = recommendations.slice(0, 6);
+
+    let aiSummaryHtml = '';
+    const aiFirst = options.aiFirst !== false;
+    if (aiFirst) {
+        try {
+            aiSummaryHtml = await buildTrainingAiSummary(drillsToShow, trendContext);
+        } catch (error) {
+            console.warn('Training AI summary skipped:', error.message || error);
+        }
+    }
+
+    const trendPills = `
+        <div class=\"training-trend-strip\">
+            <span class=\"trend-pill ${trendContext.metrics.offline.status}\">Offline: ${trendContext.metrics.offline.status}</span>
+            <span class=\"trend-pill ${trendContext.metrics.facePathVariance.status}\">Face/Path: ${trendContext.metrics.facePathVariance.status}</span>
+            <span class=\"trend-pill ${trendContext.metrics.smash.status}\">Smash: ${trendContext.metrics.smash.status}</span>
+            <span class=\"trend-pill ${trendContext.metrics.launch.status}\">Launch: ${trendContext.metrics.launch.status}</span>
+        </div>
+    `;
+
+    let html = `
+        <div class=\"training-summary-card\">
+            <h4 style=\"margin:0 0 8px 0;\">Session Trend Snapshot</h4>
+            <p style=\"margin:0 0 8px 0; color:var(--text-secondary); font-size:14px;\">Based on ${trendContext.sessionsAnalyzed} saved sessions (latest vs previous window).</p>
+            ${trendPills}
+            ${aiSummaryHtml || '<p style=\"margin-top:10px; color:var(--text-secondary); font-size:14px;\">AI coach summary unavailable. Using deterministic training plan.</p>'}
+        </div>
+    `;
+
+    drillsToShow.forEach((drill, index) => {
+        const priorityColor = drill.priority >= 12 ? 'var(--danger)' :
+            drill.priority >= 9 ? 'var(--warning)' :
+                'var(--primary)';
         const drillId = `drill-${index}`;
-        
-        html += `<div class="drill-card expandable-drill" style="border-left-color: ${priorityColor}; cursor: pointer;" onclick="toggleDrill('${drillId}')">
-            <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 8px;">
-                <h4 style="margin: 0;">${index + 1}. ${drill.title}</h4>
-                <div style="display: flex; gap: 8px; align-items: center;">
-                    <span style="font-size: 11px; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.5px;">
-                        ${drill.score >= 12 ? 'Critical' : drill.score >= 9 ? 'High Priority' : 'Recommended'}
-                    </span>
-                    <span class="drill-toggle" id="${drillId}-toggle" style="font-size: 18px; transition: transform 0.3s;">▼</span>
+
+        html += `<div class=\"drill-card expandable-drill\" style=\"border-left-color:${priorityColor}; cursor:pointer;\" onclick=\"toggleDrill('${drillId}')\">
+            <div style=\"display:flex; justify-content:space-between; align-items:start; gap:10px; margin-bottom:8px;\">
+                <div>
+                    <h4 style=\"margin:0;\">${index + 1}. ${drill.title}</h4>
+                    <div style=\"font-size:12px; color:var(--text-secondary); margin-top:4px;\">Club Focus: ${drill.club}</div>
+                </div>
+                <div style=\"display:flex; gap:8px; align-items:center;\">
+                    <span style=\"font-size:11px; color:var(--text-secondary); text-transform:uppercase; letter-spacing:0.5px;\">${drill.priority >= 12 ? 'Critical' : drill.priority >= 9 ? 'High Priority' : 'Recommended'}</span>
+                    <span class=\"drill-toggle\" id=\"${drillId}-toggle\" style=\"font-size:18px; transition:transform 0.3s;\">▼</span>
                 </div>
             </div>
-            ${drill.issue ? `<div style="font-size: 13px; color: var(--text-secondary); margin-bottom: 12px; font-style: italic;">Addresses: ${drill.issue}</div>` : ''}
-            <div id="${drillId}-content" class="drill-content" style="max-height: 0; overflow: hidden; transition: max-height 0.3s ease-out;">
-                <p style="margin-bottom: 12px;">${drill.desc}</p>
-                ${drill.reps ? `<div style="font-size: 13px; color: var(--text-secondary); margin-bottom: 6px;"><strong>Reps:</strong> ${drill.reps}</div>` : ''}
-                ${drill.focus ? `<div style="font-size: 13px; color: var(--primary);"><strong>Focus:</strong> ${drill.focus}</div>` : ''}
+            <div style=\"font-size:13px; color:var(--text-secondary); margin-bottom:10px;\"><strong>Issue:</strong> ${drill.issue}</div>
+            <div style=\"font-size:13px; color:var(--text-secondary); margin-bottom:12px;\"><strong>Trend:</strong> ${drill.trendText}</div>
+            <div id=\"${drillId}-content\" class=\"drill-content\" style=\"max-height:0; overflow:hidden; transition:max-height 0.3s ease-out;\">
+                <div style=\"font-size:14px; margin-bottom:10px;\"><strong>Root Cause:</strong> ${drill.rootCause}</div>
+                <div style=\"font-size:14px; margin-bottom:6px;\"><strong>What To Do Today</strong></div>
+                <ol style=\"margin:0 0 12px 20px; color:var(--text-secondary); font-size:14px;\">
+                    ${drill.drillSteps.map(step => `<li style=\"margin-bottom:4px;\">${step}</li>`).join('')}
+                </ol>
+                <div style=\"font-size:13px; color:var(--text-secondary); margin-bottom:6px;\"><strong>Reps/Sets:</strong> ${drill.repsSets}</div>
+                <div style=\"font-size:13px; color:var(--text-secondary); margin-bottom:6px;\"><strong>How You Know It Worked:</strong> ${drill.targetMetric}</div>
+                <div style=\"font-size:13px; color:var(--primary);\"><strong>Retest Rule:</strong> ${drill.retestRule}</div>
             </div>
         </div>`;
     });
-    
+
     drillsContent.innerHTML = html;
 }
 
@@ -1347,6 +1832,7 @@ function updateDrills(insights) {
 function toggleDrill(drillId) {
     const content = document.getElementById(`${drillId}-content`);
     const toggle = document.getElementById(`${drillId}-toggle`);
+    if (!content || !toggle) return;
     
     if (content.style.maxHeight && content.style.maxHeight !== '0px') {
         content.style.maxHeight = '0px';

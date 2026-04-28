@@ -6,6 +6,7 @@
 /progress         /overview.html      200
 /data             /data-table.html    200
 /admin            /admin.html         200
+/settings         /settings.html      200
 
 # Fallback for any other paths
 /*                /index.html         404

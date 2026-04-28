@@ -1,0 +1,36 @@
+- generic [ref=e1]:
+  - generic [ref=e3]:
+    - heading "Golf Launch Monitor" [level=2] [ref=e4]
+    - paragraph [ref=e5]: Sign in to save your data and access from anywhere
+    - generic [ref=e6]:
+      - generic [ref=e7]: Invite Access Code
+      - generic [ref=e8]:
+        - textbox "Invite Access Code" [disabled] [ref=e9]:
+          - /placeholder: Enter join code
+        - button "Unlock" [disabled] [ref=e10] [cursor=pointer]
+      - paragraph [ref=e11]: No invite link loaded. Admin can sign in. Others need invite link + code.
+    - button "Sign In / Sign Up" [active] [ref=e12] [cursor=pointer]
+  - iframe [ref=e13]:
+    - dialog [ref=f2e2]:
+      - generic [ref=f2e4]:
+        - button "× Close" [ref=f2e5] [cursor=pointer]:
+          - text: ×
+          - generic [ref=f2e6]: Close
+        - generic [ref=f2e7]:
+          - button "Sign up" [ref=f2e8] [cursor=pointer]
+          - button "Log in" [ref=f2e9] [cursor=pointer]
+        - generic [ref=f2e10]:
+          - generic [ref=f2e11]:
+            - generic [ref=f2e13]:
+              - generic [ref=f2e14]: Enter your name
+              - textbox "Enter your name" [ref=f2e15]:
+                - /placeholder: Email
+            - generic [ref=f2e17]:
+              - generic [ref=f2e18]: Enter your password
+              - textbox "Enter your password" [ref=f2e19]:
+                - /placeholder: Password
+            - button "Log in" [ref=f2e20] [cursor=pointer]
+          - button "Forgot password?" [ref=f2e21] [cursor=pointer]
+      - link "Coded by Netlify ♥" [ref=f2e22] [cursor=pointer]:
+        - /url: https://www.netlify.com
+        - text: Coded by Netlify ♥
