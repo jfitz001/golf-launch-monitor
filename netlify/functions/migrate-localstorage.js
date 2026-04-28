@@ -1,86 +1,81 @@
-import { requireInviteAccess } from './_invite.js';
-import { getSupabaseConfig, requireActiveUser } from './_access.js';
-
-// Migrate localStorage sessions to Supabase - using REST API
+// Migrate localStorage to Supabase - simplified
 export default async (req, context) => {
   if (req.method !== 'POST') {
     return new Response('Method not allowed', { status: 405 });
   }
 
-  const inviteAccess = requireInviteAccess(req);
-  if (!inviteAccess.ok) {
-    return inviteAccess.response;
+  const projectKey = process.env.PROJECT_KEY;
+  const serviceKey = process.env.SERVICE_ROLE_KEY;
+
+  if (!projectKey || !serviceKey) {
+    return new Response(JSON.stringify({ error: 'Supabase not configured' }), {
+      status: 500,
+      headers: { 'Content-Type': 'application/json' }
+    });
   }
 
-  try {
-    const { sessions, userEmail } = await req.json();
+  const supabaseUrl = `https://${projectKey}.supabase.co`;
 
-    if (!sessions || !userEmail) {
-      return new Response(JSON.stringify({ error: 'Sessions and email required' }), {
+  try {
+    const { email, sessions } = await req.json();
+
+    if (!email || !sessions || !Array.isArray(sessions)) {
+      return new Response(JSON.stringify({ error: 'Email and sessions array required' }), {
         status: 400,
         headers: { 'Content-Type': 'application/json' }
       });
     }
 
-    const config = getSupabaseConfig();
-    if (!config) {
-      return new Response(JSON.stringify({ error: 'Supabase not configured' }), {
-        status: 500,
-        headers: { 'Content-Type': 'application/json' }
-      });
-    }
+    // Ensure user exists
+    const userRes = await fetch(`${supabaseUrl}/rest/v1/rpc/ensure_user_exists`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'apikey': serviceKey,
+        'Authorization': `Bearer ${serviceKey}`
+      },
+      body: JSON.stringify({ user_email: email, netlify_user_id: null })
+    });
 
-    const activeUser = await requireActiveUser(String(userEmail).trim().toLowerCase());
-    if (!activeUser.ok) {
-      return activeUser.response;
-    }
+    const userId = await userRes.json();
 
-    const userId = activeUser.user.id;
-    const results = { total: sessions.length, successful: 0, failed: 0, errors: [] };
+    let migrated = 0;
+    let failed = 0;
 
     for (const session of sessions) {
       try {
-        const carryDistances = (session.data || []).map(s => parseFloat(s['Carry Distance']) || 0).filter(d => d > 0);
-        const avgCarry = carryDistances.length > 0 ? carryDistances.reduce((a, b) => a + b, 0) / carryDistances.length : 0;
-        const bestShot = carryDistances.length > 0 ? Math.max(...carryDistances) : 0;
+        const shots = session.data || [];
+        const shotCount = shots.length;
+        const avgCarry = shots.reduce((sum, s) => sum + (parseFloat(s['Carry Distance'] || s['Carry Dist.'] || 0)), 0) / shotCount || 0;
+        const avgClubSpeed = shots.reduce((sum, s) => sum + (parseFloat(s['Club Speed'] || 0)), 0) / shotCount || 0;
 
-        const insertRes = await fetch(`${config.supabaseUrl}/rest/v1/golf_sessions`, {
+        await fetch(`${supabaseUrl}/rest/v1/golf_sessions`, {
           method: 'POST',
           headers: {
-            ...config.headers,
-            Prefer: 'return=representation'
+            'Content-Type': 'application/json',
+            'apikey': serviceKey,
+            'Authorization': `Bearer ${serviceKey}`
           },
           body: JSON.stringify({
             user_id: userId,
-            club_type: session.name || 'Migrated Session',
-            shot_count: (session.data || []).length,
-            avg_carry: avgCarry.toFixed(2),
-            best_shot: bestShot.toFixed(2),
-            consistency: session.stats?.consistency || 0,
-            swing_score: session.swingScore?.score || 0,
-            swing_grade: session.swingScore?.description || 'Migrated',
-            session_data: session.data || []
+            session_name: session.name || `Session ${new Date(session.date).toLocaleDateString()}`,
+            shot_data: shots,
+            shot_count: shotCount,
+            avg_carry: Math.round(avgCarry * 10) / 10,
+            avg_club_speed: Math.round(avgClubSpeed * 10) / 10
           })
         });
-
-        if (insertRes.ok) {
-          results.successful++;
-        } else {
-          results.failed++;
-          results.errors.push({ session: session.name, error: await insertRes.text() });
-        }
-      } catch (err) {
-        results.failed++;
-        results.errors.push({ session: session.name, error: err.message });
+        migrated++;
+      } catch (e) {
+        failed++;
       }
     }
 
-    return new Response(JSON.stringify({ success: true, results }), {
+    return new Response(JSON.stringify({ success: true, migrated, failed }), {
       status: 200,
       headers: { 'Content-Type': 'application/json' }
     });
   } catch (error) {
-    console.error('Migration error:', error);
     return new Response(JSON.stringify({ error: error.message }), {
       status: 500,
       headers: { 'Content-Type': 'application/json' }
