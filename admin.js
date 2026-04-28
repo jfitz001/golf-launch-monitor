@@ -270,34 +270,6 @@ async function loadUserList() {
         }
     }
 }
-            const users = data.users || [];
-            
-            if (users.length > 0) {
-                tbody.innerHTML = users.map(user => `
-                    <tr>
-                        <td>${user.email}</td>
-                        <td>${user.role === 'admin' ? '<span class="role-badge">Admin</span>' : 'User'}</td>
-                        <td>${new Date(user.lastActive).toLocaleDateString()}</td>
-                        <td>
-                            <div class="user-actions">
-                                ${user.role !== 'admin' ? '<button class="btn-revoke" onclick="revokeAccess(\'' + user.email + '\')">Revoke</button>' : '-'}
-                            </div>
-                        </td>
-                    </tr>
-                `).join('');
-                
-                // Show note about cached data
-                const note = document.createElement('tr');
-                note.innerHTML = '<td colspan="4" style="text-align: center; color: var(--warning); font-size: 0.875rem; padding: 8px;">Showing cached data (offline)</td>';
-                tbody.appendChild(note);
-            } else {
-                tbody.innerHTML = '<tr><td colspan="4" class="empty-log">Error loading users</td></tr>';
-            }
-        } else {
-            tbody.innerHTML = '<tr><td colspan="4" class="empty-log">Error loading users</td></tr>';
-        }
-    }
-}
 
 // Save rate limits
 document.getElementById('save-rate-limits').addEventListener('click', () => {

@@ -316,12 +316,19 @@ function calculateSessionStats() {
 }
 
 function calculateSwingScore() {
-    // Safety check
-    if (!golfData || golfData.length === 0) {
+    // Get data from multiple sources
+    let data = null;
+    if (typeof golfData !== 'undefined' && golfData && golfData.length > 0) {
+        data = golfData;
+    } else if (window.golfData && window.golfData.length > 0) {
+        data = window.golfData;
+    }
+    
+    if (!data || data.length === 0) {
         return { score: 0, grade: 'N/A', desc: 'No data' };
     }
     
-    const insights = analyzeGolfData(golfData);
+    const insights = analyzeGolfData(data);
     
     // Start at 100, deduct for issues
     let score = 100;
@@ -368,23 +375,56 @@ function calculateSwingScore() {
 }
 
 function updateSwingScore() {
-    // Check if we have data
-    if (!golfData || golfData.length === 0) {
-        console.warn('No data available for swing score');
-        document.getElementById('swingScore').textContent = '--';
-        document.getElementById('swingScoreDesc').textContent = 'Upload data to analyze';
+    const scoreEl = document.getElementById('swingScore');
+    const descEl = document.getElementById('swingScoreDesc');
+    
+    // Elements not on this page
+    if (!scoreEl || !descEl) return;
+    
+    // Try multiple sources for golf data
+    let data = null;
+    if (typeof golfData !== 'undefined' && golfData && golfData.length > 0) {
+        data = golfData;
+    } else if (window.golfData && window.golfData.length > 0) {
+        data = window.golfData;
+    } else {
+        const stored = localStorage.getItem('currentGolfData');
+        if (stored && stored !== '[]') {
+            try {
+                data = JSON.parse(stored);
+            } catch (e) {}
+        }
+    }
+    
+    if (!data || data.length === 0) {
+        scoreEl.textContent = '--';
+        descEl.textContent = 'Upload data to analyze';
         return;
     }
     
     try {
+        // Check if analyzeGolfData exists
+        if (typeof analyzeGolfData !== 'function') {
+            console.warn('analyzeGolfData not available');
+            scoreEl.textContent = '--';
+            descEl.textContent = 'Analysis unavailable';
+            return;
+        }
+        
+        // Temporarily set global for analyzeGolfData
+        const origData = window.golfData;
+        window.golfData = data;
+        
         const result = calculateSwingScore();
         
-        document.getElementById('swingScore').textContent = result.score;
-        document.getElementById('swingScoreDesc').textContent = `${result.grade} - ${result.desc}`;
+        window.golfData = origData;
+        
+        scoreEl.textContent = result.score;
+        descEl.textContent = `${result.grade} - ${result.desc}`;
     } catch (error) {
         console.error('Error calculating swing score:', error);
-        document.getElementById('swingScore').textContent = '--';
-        document.getElementById('swingScoreDesc').textContent = 'Error calculating score';
+        scoreEl.textContent = '--';
+        descEl.textContent = 'Error calculating';
     }
 }
 
