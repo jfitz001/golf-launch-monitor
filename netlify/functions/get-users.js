@@ -1,61 +1,74 @@
-// Get all users from Netlify Identity
+// Get all users from Supabase
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+
 export default async (req, context) => {
-  if (req.method !== 'GET') {
+  if (req.method !== 'GET' && req.method !== 'POST') {
     return new Response('Method not allowed', { status: 405 });
   }
 
   try {
+    // Get admin email from query or body
+    let adminEmail;
+    if (req.method === 'GET') {
+      const url = new URL(req.url);
+      adminEmail = url.searchParams.get('admin');
+    } else {
+      const body = await req.json();
+      adminEmail = body.admin;
+    }
+
     // Verify admin access
-    const authHeader = req.headers.get('authorization');
-    if (!authHeader) {
-      return new Response(JSON.stringify({ error: 'Unauthorized' }), {
-        status: 401,
+    if (adminEmail !== 'jamiefitzgerald001@gmail.com') {
+      return new Response(JSON.stringify({ error: 'Unauthorized - Admin only' }), {
+        status: 403,
         headers: { 'Content-Type': 'application/json' }
       });
     }
 
-    // Extract JWT token
-    const token = authHeader.replace('Bearer ', '');
-    
-    // Verify it's the admin user
-    // In production, you'd decode the JWT and verify the email
-    // For now, we'll fetch all users from Netlify Identity
-    
-    const siteUrl = process.env.URL || 'https://golf-launch-r10.netlify.app';
-    
-    // Fetch users from Netlify Identity Admin API
-    const response = await fetch(`${siteUrl}/.netlify/identity/admin/users`, {
-      headers: {
-        'Authorization': `Bearer ${token}`
-      }
-    });
+    // Initialize Supabase with service role key
+    const projectKey = process.env.PROJECT_KEY || context.env?.PROJECT_KEY;
+    const supabaseUrl = projectKey ? `https://${projectKey}.supabase.co` : null;
+    const supabaseServiceKey = process.env.SERVICE_ROLE_KEY || context.env?.SERVICE_ROLE_KEY;
 
-    if (!response.ok) {
-      // If admin API doesn't work, return structure with current user only
-      return new Response(JSON.stringify({
+    if (!supabaseUrl || !supabaseServiceKey) {
+      return new Response(JSON.stringify({ error: 'Supabase not configured' }), {
+        status: 500,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
+
+    const supabase = createClient(supabaseUrl, supabaseServiceKey);
+
+    // Fetch all users from Supabase
+    const { data: users, error } = await supabase
+      .from('users')
+      .select('*')
+      .order('created_at', { ascending: false });
+
+    if (error) {
+      console.error('Error fetching users from Supabase:', error);
+      return new Response(JSON.stringify({ 
+        error: error.message,
         users: [],
-        total: 0,
-        note: 'Admin API requires service_role key. Showing cached data only.'
+        total: 0
       }), {
-        status: 200,
+        status: 500,
         headers: { 'Content-Type': 'application/json' }
       });
     }
 
-    const data = await response.json();
-    
-    // Transform users to our format
-    const users = (data.users || data || []).map(user => ({
+    // Transform users to admin format
+    const transformedUsers = (users || []).map(user => ({
       id: user.id,
       email: user.email,
       role: user.email === 'jamiefitzgerald001@gmail.com' ? 'admin' : 'user',
-      lastActive: user.updated_at || user.created_at || new Date().toISOString(),
+      lastActive: user.updated_at || user.created_at,
       created_at: user.created_at
     }));
 
     return new Response(JSON.stringify({
-      users,
-      total: users.length
+      users: transformedUsers,
+      total: transformedUsers.length
     }), {
       status: 200,
       headers: { 
@@ -64,7 +77,7 @@ export default async (req, context) => {
       }
     });
   } catch (error) {
-    console.error('Error fetching users:', error);
+    console.error('Error in get-users function:', error);
     
     return new Response(JSON.stringify({ 
       users: [],

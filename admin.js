@@ -192,18 +192,17 @@ async function loadUserList() {
             return;
         }
         
-        const token = await currentUser.jwt();
-        
-        const response = await fetch('/.netlify/functions/get-users', {
+        // Pass admin email to verify authorization
+        const response = await fetch(`/.netlify/functions/get-users?admin=${encodeURIComponent(currentUser.email)}`, {
             method: 'GET',
             headers: {
-                'Authorization': `Bearer ${token}`,
                 'Content-Type': 'application/json'
             }
         });
         
         if (!response.ok) {
-            throw new Error(`HTTP ${response.status}`);
+            const errorData = await response.json();
+            throw new Error(errorData.error || `HTTP ${response.status}`);
         }
         
         const data = await response.json();
@@ -213,7 +212,7 @@ async function loadUserList() {
         document.getElementById('total-users').textContent = users.length;
         
         if (users.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="4" class="empty-log">No users found</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="4" class="empty-log">No users found. Make sure Supabase migration is complete.</td></tr>';
             return;
         }
         
@@ -248,6 +247,29 @@ async function loadUserList() {
         const cached = localStorage.getItem('adminUsageData');
         if (cached) {
             const data = JSON.parse(cached);
+            if (data.users && data.users.length > 0) {
+                tbody.innerHTML = data.users.map(user => `
+                    <tr>
+                        <td>${user.email}</td>
+                        <td>${user.role === 'admin' ? '<span class="role-badge">Admin</span>' : 'User'}</td>
+                        <td>${new Date(user.lastActive).toLocaleDateString()}</td>
+                        <td>
+                            <div class="user-actions">
+                                ${user.role !== 'admin' ? '<button class="btn-revoke" onclick="revokeAccess(\'' + user.email + '\')">Revoke</button>' : '-'}
+                            </div>
+                        </td>
+                    </tr>
+                `).join('');
+                
+                document.getElementById('total-users').textContent = data.users.length;
+            } else {
+                tbody.innerHTML = '<tr><td colspan="4" class="empty-log">Error loading users: ' + error.message + '</td></tr>';
+            }
+        } else {
+            tbody.innerHTML = '<tr><td colspan="4" class="empty-log">Error loading users: ' + error.message + '</td></tr>';
+        }
+    }
+}
             const users = data.users || [];
             
             if (users.length > 0) {
