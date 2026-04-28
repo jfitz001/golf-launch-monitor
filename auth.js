@@ -1,4 +1,4 @@
-// Netlify Identity authentication
+// Netlify Identity authentication - v2.0 cleaned
 const netlifyIdentity = window.netlifyIdentity;
 
 // Configure Netlify Identity

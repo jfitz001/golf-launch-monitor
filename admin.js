@@ -1,4 +1,4 @@
-// Admin functionality
+// Admin functionality - v2.0 cleaned
 const ADMIN_DASHBOARD_EMAIL = 'jamiefitzgerald001@gmail.com';
 
 // Check if user is admin
