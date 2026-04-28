@@ -26,49 +26,82 @@ function checkAdminAccess() {
 window.addEventListener('load', () => {
     if (checkAdminAccess()) {
         loadAdminData();
+        // Auto-refresh every 30 seconds
+        setInterval(loadAdminData, 30000);
     }
 });
 
-// Mock data for demonstration (in production, this would come from a database)
+// Store data in memory
 let apiUsageData = {
     callsToday: 0,
     callsMonth: 0,
     totalUsers: 1,
     rateLimitHits: 0,
     recentRequests: [],
-    users: [
-        {
-            email: ADMIN_EMAIL,
-            role: 'admin',
-            lastActive: new Date().toISOString()
-        }
-    ]
+    users: []
 };
 
-// Load from localStorage if exists
-const savedUsageData = localStorage.getItem('adminUsageData');
-if (savedUsageData) {
-    apiUsageData = { ...apiUsageData, ...JSON.parse(savedUsageData) };
-}
-
-function loadAdminData() {
-    // Load API usage stats
-    document.getElementById('api-calls-today').textContent = apiUsageData.callsToday || 0;
-    document.getElementById('api-calls-month').textContent = apiUsageData.callsMonth || 0;
-    document.getElementById('total-users').textContent = apiUsageData.totalUsers || 1;
-    document.getElementById('rate-limit-hits').textContent = apiUsageData.rateLimitHits || 0;
-    
-    // Load rate limit config
-    const rateLimits = JSON.parse(localStorage.getItem('rateLimits') || '{"perMinute":10,"perHour":100,"perDay":500}');
-    document.getElementById('requests-per-minute').value = rateLimits.perMinute;
-    document.getElementById('requests-per-hour').value = rateLimits.perHour;
-    document.getElementById('requests-per-day').value = rateLimits.perDay;
-    
-    // Load API request log
-    loadApiRequestLog();
-    
-    // Load user list
-    loadUserList();
+async function loadAdminData() {
+    try {
+        // Show loading state
+        document.getElementById('api-calls-today').textContent = '...';
+        document.getElementById('api-calls-month').textContent = '...';
+        
+        // Fetch real usage stats from backend
+        const user = netlifyIdentity.currentUser();
+        const token = user ? await user.jwt() : null;
+        
+        const response = await fetch('/.netlify/functions/get-usage-stats', {
+            method: 'GET',
+            headers: {
+                'Authorization': `Bearer ${token}`,
+                'Content-Type': 'application/json'
+            }
+        });
+        
+        if (response.ok) {
+            const stats = await response.json();
+            apiUsageData = stats;
+            
+            // Update UI with real data
+            document.getElementById('api-calls-today').textContent = stats.callsToday || 0;
+            document.getElementById('api-calls-month').textContent = stats.callsMonth || 0;
+            document.getElementById('total-users').textContent = stats.totalUsers || 1;
+            document.getElementById('rate-limit-hits').textContent = stats.rateLimitHits || 0;
+        } else {
+            // Fallback to localStorage on error
+            const cached = localStorage.getItem('adminUsageData');
+            if (cached) {
+                apiUsageData = JSON.parse(cached);
+                document.getElementById('api-calls-today').textContent = apiUsageData.callsToday || 0;
+                document.getElementById('api-calls-month').textContent = apiUsageData.callsMonth || 0;
+                document.getElementById('total-users').textContent = apiUsageData.totalUsers || 1;
+                document.getElementById('rate-limit-hits').textContent = apiUsageData.rateLimitHits || 0;
+            }
+        }
+        
+        // Load rate limit config
+        const rateLimits = JSON.parse(localStorage.getItem('rateLimits') || '{"perMinute":10,"perHour":100,"perDay":500}');
+        document.getElementById('requests-per-minute').value = rateLimits.perMinute;
+        document.getElementById('requests-per-hour').value = rateLimits.perHour;
+        document.getElementById('requests-per-day').value = rateLimits.perDay;
+        
+        // Load API request log and user list
+        await Promise.all([
+            loadApiRequestLog(),
+            loadUserList()
+        ]);
+        
+    } catch (error) {
+        console.error('Failed to load admin data:', error);
+        // Fallback to cached data
+        const cached = localStorage.getItem('adminUsageData');
+        if (cached) {
+            apiUsageData = JSON.parse(cached);
+            document.getElementById('api-calls-today').textContent = apiUsageData.callsToday || 0;
+            document.getElementById('api-calls-month').textContent = apiUsageData.callsMonth || 0;
+        }
+    }
 }
 
 function loadApiRequestLog() {
@@ -90,21 +123,46 @@ function loadApiRequestLog() {
     `).join('');
 }
 
-function loadUserList() {
+async function loadUserList() {
     const tbody = document.getElementById('user-list-body');
     
-    tbody.innerHTML = apiUsageData.users.map(user => `
-        <tr>
-            <td>${user.email}</td>
-            <td>${user.role === 'admin' ? '<span class="role-badge">Admin</span>' : 'User'}</td>
-            <td>${new Date(user.lastActive).toLocaleDateString()}</td>
-            <td>
-                <div class="user-actions">
-                    ${user.role !== 'admin' ? '<button class="btn-revoke" onclick="revokeAccess(\'' + user.email + '\')">Revoke</button>' : '-'}
-                </div>
-            </td>
-        </tr>
-    `).join('');
+    try {
+        // Fetch users from Netlify Identity
+        const currentUser = netlifyIdentity.currentUser();
+        
+        // For now, show current user and any cached users
+        const users = apiUsageData.users || [];
+        
+        // Add current user if not in list
+        if (currentUser && !users.find(u => u.email === currentUser.email)) {
+            users.push({
+                email: currentUser.email,
+                role: currentUser.email === ADMIN_EMAIL ? 'admin' : 'user',
+                lastActive: new Date().toISOString()
+            });
+        }
+        
+        if (users.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="4" class="empty-log">No users found</td></tr>';
+            return;
+        }
+        
+        tbody.innerHTML = users.map(user => `
+            <tr>
+                <td>${user.email}</td>
+                <td>${user.role === 'admin' ? '<span class="role-badge">Admin</span>' : 'User'}</td>
+                <td>${new Date(user.lastActive).toLocaleDateString()}</td>
+                <td>
+                    <div class="user-actions">
+                        ${user.role !== 'admin' ? '<button class="btn-revoke" onclick="revokeAccess(\'' + user.email + '\')">Revoke</button>' : '-'}
+                    </div>
+                </td>
+            </tr>
+        `).join('');
+    } catch (error) {
+        console.error('Failed to load users:', error);
+        tbody.innerHTML = '<tr><td colspan="4" class="empty-log">Error loading users</td></tr>';
+    }
 }
 
 // Save rate limits
@@ -120,42 +178,89 @@ document.getElementById('save-rate-limits').addEventListener('click', () => {
 });
 
 // Track API call (call this from app.js when making API requests)
-function trackApiCall(endpoint, status, responseTime) {
-    apiUsageData.callsToday = (apiUsageData.callsToday || 0) + 1;
-    apiUsageData.callsMonth = (apiUsageData.callsMonth || 0) + 1;
-    
-    const user = netlifyIdentity.currentUser();
-    
-    apiUsageData.recentRequests = apiUsageData.recentRequests || [];
-    apiUsageData.recentRequests.unshift({
-        timestamp: new Date().toISOString(),
-        user: user ? user.email : 'anonymous',
-        endpoint: endpoint,
-        status: status,
-        responseTime: responseTime
-    });
-    
-    // Keep only last 100 requests
-    if (apiUsageData.recentRequests.length > 100) {
-        apiUsageData.recentRequests = apiUsageData.recentRequests.slice(0, 100);
+async function trackApiCall(endpoint, status, responseTime) {
+    try {
+        const user = netlifyIdentity?.currentUser();
+        const callData = {
+            timestamp: new Date().toISOString(),
+            user: user ? user.email : 'anonymous',
+            endpoint: endpoint,
+            status: status,
+            responseTime: responseTime
+        };
+        
+        // Send to backend
+        await fetch('/.netlify/functions/track-api-usage', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(callData)
+        });
+        
+        // Also update local cache for immediate feedback
+        const cached = JSON.parse(localStorage.getItem('adminUsageData') || '{"callsToday":0,"callsMonth":0,"recentRequests":[]}');
+        cached.callsToday = (cached.callsToday || 0) + 1;
+        cached.callsMonth = (cached.callsMonth || 0) + 1;
+        
+        cached.recentRequests = cached.recentRequests || [];
+        cached.recentRequests.unshift(callData);
+        
+        // Keep only last 100 requests
+        if (cached.recentRequests.length > 100) {
+            cached.recentRequests = cached.recentRequests.slice(0, 100);
+        }
+        
+        localStorage.setItem('adminUsageData', JSON.stringify(cached));
+    } catch (error) {
+        console.error('Failed to track API call:', error);
     }
-    
-    localStorage.setItem('adminUsageData', JSON.stringify(apiUsageData));
 }
 
-// Check rate limit
-function checkRateLimit() {
+// Check rate limit with backend
+async function checkRateLimit() {
+    try {
+        const user = netlifyIdentity?.currentUser();
+        const userId = user ? user.id : 'anonymous';
+        
+        const response = await fetch('/.netlify/functions/check-rate-limit', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ userId })
+        });
+        
+        if (response.ok) {
+            const result = await response.json();
+            return result.allowed;
+        }
+        
+        // Fallback to local check if backend fails
+        return checkRateLimitLocal();
+    } catch (error) {
+        console.error('Rate limit check failed:', error);
+        return checkRateLimitLocal();
+    }
+}
+
+// Fallback local rate limit check
+function checkRateLimitLocal() {
     const rateLimits = JSON.parse(localStorage.getItem('rateLimits') || '{"perMinute":10,"perHour":100,"perDay":500}');
     const now = Date.now();
     
+    const cached = JSON.parse(localStorage.getItem('adminUsageData') || '{"recentRequests":[]}');
+    const recentRequests = cached.recentRequests || [];
+    
     // Get recent calls from last minute
-    const recentCalls = (apiUsageData.recentRequests || []).filter(req => {
+    const recentCalls = recentRequests.filter(req => {
         return now - new Date(req.timestamp).getTime() < 60000; // 1 minute
     });
     
     if (recentCalls.length >= rateLimits.perMinute) {
-        apiUsageData.rateLimitHits = (apiUsageData.rateLimitHits || 0) + 1;
-        localStorage.setItem('adminUsageData', JSON.stringify(apiUsageData));
+        const updated = JSON.parse(localStorage.getItem('adminUsageData') || '{}');
+        updated.rateLimitHits = (updated.rateLimitHits || 0) + 1;
+        localStorage.setItem('adminUsageData', JSON.stringify(updated));
         return false;
     }
     

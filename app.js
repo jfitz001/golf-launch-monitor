@@ -85,6 +85,20 @@ function parseCSV(text) {
 }
 
 function displayData() {
+    // Load data from localStorage if not in memory
+    if (!golfData || golfData.length === 0) {
+        const stored = localStorage.getItem('currentGolfData');
+        if (stored && stored !== '[]') {
+            golfData = JSON.parse(stored);
+        }
+    }
+    
+    // Check if we have data
+    if (!golfData || golfData.length === 0) {
+        console.warn('No golf data available to display');
+        return;
+    }
+    
     document.getElementById('dataLoaded').classList.remove('hidden');
     
     // Calculate stats
@@ -1053,6 +1067,8 @@ Provide:
 
 Format as HTML with proper styling.`;
 
+        const startTime = Date.now();
+        
         const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -1063,7 +1079,14 @@ Format as HTML with proper styling.`;
             })
         });
         
+        const responseTime = Date.now() - startTime;
+        
         const data = await response.json();
+        
+        // Track API call for admin monitoring
+        if (window.trackApiCall) {
+            window.trackApiCall('gemini-api', response.status, responseTime);
+        }
         
         if (!data.candidates || !data.candidates[0]) {
             throw new Error('Invalid API response. Check your API key.');
@@ -1074,6 +1097,11 @@ Format as HTML with proper styling.`;
         insightsDiv.innerHTML = `<div style="color: var(--text); line-height: 1.8;">${insight.replace(/\n/g, '<br>')}</div>`;
         
     } catch (error) {
+        // Track failed API call
+        if (window.trackApiCall) {
+            window.trackApiCall('gemini-api', 500, 0);
+        }
+        
         insightsDiv.innerHTML = `<div style="color: var(--danger);">Error generating AI insights. Using built-in analysis.</div>`;
         console.error(error);
         setTimeout(displayAutomaticInsights, 1000);

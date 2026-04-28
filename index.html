@@ -135,5 +135,23 @@
     <script src="sessions.js"></script>
     <script src="app.js"></script>
     <script src="auth.js"></script>
+    <script>
+    // Check if session data was loaded
+    window.addEventListener('load', () => {
+        const currentData = localStorage.getItem('currentGolfData');
+        if (currentData && currentData !== '[]') {
+            const golfData = JSON.parse(currentData);
+            if (golfData && golfData.length > 0) {
+                // Data exists, show the dashboard
+                document.getElementById('dataLoaded').classList.remove('hidden');
+                
+                // Trigger displayData to show stats
+                if (window.displayData) {
+                    window.displayData();
+                }
+            }
+        }
+    });
+    </script>
 </body>
 </html>
