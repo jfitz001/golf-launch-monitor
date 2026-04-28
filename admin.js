@@ -458,7 +458,8 @@ document.getElementById('migrate-data-btn')?.addEventListener('click', async () 
         });
         
         if (!response.ok) {
-            throw new Error('Migration failed');
+            const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
+            throw new Error(errorData.error || `HTTP ${response.status}: ${response.statusText}`);
         }
         
         const result = await response.json();
@@ -505,8 +506,25 @@ document.getElementById('migrate-data-btn')?.addEventListener('click', async () 
         console.error('Migration error:', error);
         btn.textContent = 'Migrate LocalStorage Data';
         btn.disabled = false;
-        status.textContent = 'Migration failed. Please try again.';
+        status.textContent = `Migration failed: ${error.message}`;
         status.style.color = 'var(--danger)';
+        
+        // Show helpful message if it's a Supabase configuration error
+        if (error.message.includes('Supabase not configured') || error.message.includes('relation') || error.message.includes('does not exist')) {
+            resultsDiv.style.display = 'block';
+            reportDiv.innerHTML = `
+                <div style="background: var(--danger); color: white; padding: 16px; border-radius: 8px; margin-top: 12px;">
+                    <h4 style="margin: 0 0 8px 0;">Database Not Set Up</h4>
+                    <p style="margin: 0;">The Supabase database tables haven't been created yet. Please run the migration SQL in your Supabase dashboard first.</p>
+                    <p style="margin: 8px 0 0 0; font-size: 0.875rem;"><strong>Instructions:</strong></p>
+                    <ol style="margin: 4px 0 0 16px; font-size: 0.875rem;">
+                        <li>Go to <a href="https://supabase.com/dashboard" target="_blank" style="color: white; text-decoration: underline;">Supabase Dashboard</a></li>
+                        <li>Open SQL Editor</li>
+                        <li>Run the migration file from <code>supabase/migrations/</code></li>
+                    </ol>
+                </div>
+            `;
+        }
     }
 });
 
