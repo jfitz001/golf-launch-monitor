@@ -2,6 +2,7 @@
 const netlifyIdentity = window.netlifyIdentity;
 const INVITE_TOKEN_KEY = 'invite_access_token';
 const INVITE_LINK_KEY = 'invite_link_key';
+const ADMIN_EMAIL = 'jamiefitzgerald001@gmail.com';
 
 const inviteState = {
     validated: false,
@@ -112,8 +113,12 @@ async function initInviteGate() {
 
     if (!inviteKey) {
         inviteState.validated = false;
-        setLoginAvailability(false);
-        setInviteStatus('Open app from invite link with ?invite=... before entering code.', true);
+        setLoginAvailability(true);
+        setInviteStatus('No invite link loaded. Admin can sign in. Others need invite link + code.', true);
+        const unlockBtn = document.getElementById('unlock-btn');
+        const codeInput = document.getElementById('join-code-input');
+        if (unlockBtn) unlockBtn.disabled = true;
+        if (codeInput) codeInput.disabled = true;
         inviteState.gateReady = true;
         return;
     }
@@ -144,6 +149,8 @@ async function initInviteGate() {
 
     const unlockBtn = document.getElementById('unlock-btn');
     const codeInput = document.getElementById('join-code-input');
+    if (unlockBtn) unlockBtn.disabled = false;
+    if (codeInput) codeInput.disabled = false;
 
     if (unlockBtn && codeInput && !unlockBtn.dataset.bound) {
         unlockBtn.dataset.bound = '1';
@@ -268,14 +275,13 @@ function showAuth() {
 if (netlifyIdentity) {
     // Initialize Netlify Identity
     netlifyIdentity.on('init', async user => {
-        if (!inviteState.validated) {
-            showAuth();
-            return;
-        }
-
         if (user) {
             try {
                 await syncUserToSupabase(user);
+                if (!inviteState.validated && user.email !== ADMIN_EMAIL) {
+                    showAuth();
+                    return;
+                }
                 showApp(user);
             } catch (error) {
                 if (error.blocked) {
@@ -293,14 +299,14 @@ if (netlifyIdentity) {
     });
 
     netlifyIdentity.on('login', async user => {
-        if (!inviteState.validated) {
-            netlifyIdentity.logout();
-            showAuth();
-            return;
-        }
-
         try {
             await syncUserToSupabase(user);
+            if (!inviteState.validated && user.email !== ADMIN_EMAIL) {
+                alert('Invite link + code required for this account.');
+                netlifyIdentity.logout();
+                showAuth();
+                return;
+            }
             showApp(user);
             netlifyIdentity.close();
 
@@ -338,9 +344,8 @@ bootstrapAuth();
 // Login button
 if (loginBtn) {
     loginBtn.addEventListener('click', () => {
-        if (!inviteState.validated) {
+        if (!inviteState.validated && getInviteLinkKey()) {
             setInviteStatus('Unlock invite first.', true);
-            return;
         }
         netlifyIdentity.open();
     });
