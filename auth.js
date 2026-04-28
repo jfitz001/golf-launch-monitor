@@ -7,22 +7,64 @@ if (netlifyIdentity) {
 }
 
 // Initialize Netlify Identity
-netlifyIdentity.on('init', user => {
+netlifyIdentity.on('init', async user => {
     if (user) {
+        await syncUserToSupabase(user);
         showApp(user);
     } else {
         showAuth();
     }
 });
 
-netlifyIdentity.on('login', user => {
+netlifyIdentity.on('login', async user => {
+    await syncUserToSupabase(user);
     showApp(user);
     netlifyIdentity.close();
+    
+    // Refresh sessions after login
+    if (window.updateSessionsList) {
+        await window.updateSessionsList();
+    }
 });
 
 netlifyIdentity.on('logout', () => {
     showAuth();
 });
+
+// Sync user to Supabase database
+async function syncUserToSupabase(user) {
+    if (!user || !user.email) return;
+    
+    try {
+        console.log('Syncing user to Supabase:', user.email);
+        
+        const response = await fetch('/.netlify/functions/sync-user', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                email: user.email,
+                netlify_id: user.id
+            })
+        });
+        
+        if (!response.ok) {
+            throw new Error('Failed to sync user');
+        }
+        
+        const result = await response.json();
+        console.log('User synced successfully:', result);
+        
+        // Store Supabase user ID
+        if (result.user_id) {
+            localStorage.setItem('supabase_user_id', result.user_id);
+        }
+    } catch (error) {
+        console.error('Error syncing user to Supabase:', error);
+        // Don't block login on sync failure
+    }
+}
 
 // Auth UI elements
 const authSection = document.getElementById('auth-section');

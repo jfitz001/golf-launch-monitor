@@ -112,6 +112,24 @@
                 </div>
             </div>
 
+            <!-- Data Migration Tool -->
+            <div class="admin-section">
+                <h2>Data Migration</h2>
+                <div class="config-card">
+                    <p style="margin-bottom: 16px; color: var(--text-secondary);">
+                        Migrate existing localStorage sessions to Supabase database for permanent storage and multi-device sync.
+                    </p>
+                    <div style="display: flex; gap: 12px; align-items: center;">
+                        <button id="migrate-data-btn" class="primary-button">Migrate LocalStorage Data</button>
+                        <span id="migration-status" style="color: var(--text-secondary);"></span>
+                    </div>
+                    <div id="migration-results" style="margin-top: 16px; display: none;">
+                        <h3>Migration Results</h3>
+                        <div id="migration-report"></div>
+                    </div>
+                </div>
+            </div>
+
             <!-- User Management -->
             <div class="admin-section">
                 <h2>User Management</h2>
@@ -147,5 +165,10 @@
 
     <script src="auth.js"></script>
     <script src="admin.js"></script>
+    
+    <!-- Supabase Client -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="supabase-client.js"></script>
+    <script src="sync-service.js"></script>
 </body>
 </html>

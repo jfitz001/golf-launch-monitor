@@ -46,8 +46,55 @@ async function loadAdminData() {
         // Show loading state
         document.getElementById('api-calls-today').textContent = '...';
         document.getElementById('api-calls-month').textContent = '...';
+        document.getElementById('total-users').textContent = '...';
         
-        // Fetch real usage stats from backend
+        // Fetch real database stats from Supabase
+        const dbStatsResponse = await fetch('/.netlify/functions/get-database-stats');
+        if (dbStatsResponse.ok) {
+            const dbStats = await dbStatsResponse.json();
+            
+            if (dbStats.success && dbStats.stats) {
+                // Update UI with real database stats
+                document.getElementById('total-users').textContent = dbStats.stats.totalUsers;
+                
+                // Add database health indicators
+                const statsGrid = document.querySelector('.stats-grid');
+                
+                // Check if we need to add new stat cards
+                let totalSessionsCard = document.getElementById('total-sessions-card');
+                if (!totalSessionsCard) {
+                    totalSessionsCard = document.createElement('div');
+                    totalSessionsCard.className = 'stat-card';
+                    totalSessionsCard.id = 'total-sessions-card';
+                    totalSessionsCard.innerHTML = `
+                        <p>Total Sessions</p>
+                        <h3 id="total-sessions">0</h3>
+                    `;
+                    statsGrid.appendChild(totalSessionsCard);
+                }
+                
+                let dbSizeCard = document.getElementById('db-size-card');
+                if (!dbSizeCard) {
+                    dbSizeCard = document.createElement('div');
+                    dbSizeCard.className = 'stat-card';
+                    dbSizeCard.id = 'db-size-card';
+                    dbSizeCard.innerHTML = `
+                        <p>Database Size</p>
+                        <h3 id="db-size">0 MB</h3>
+                    `;
+                    statsGrid.appendChild(dbSizeCard);
+                }
+                
+                document.getElementById('total-sessions').textContent = dbStats.stats.totalSessions;
+                document.getElementById('db-size').textContent = `${dbStats.stats.estimatedSizeMB} MB`;
+                
+                // Use database session counts for API stats
+                document.getElementById('api-calls-today').textContent = dbStats.stats.sessionsToday;
+                document.getElementById('api-calls-month').textContent = dbStats.stats.sessionsMonth;
+            }
+        }
+        
+        // Fetch usage stats (API tracking)
         const user = netlifyIdentity.currentUser();
         const token = user ? await user.jwt() : null;
         
@@ -63,19 +110,26 @@ async function loadAdminData() {
             const stats = await response.json();
             apiUsageData = stats;
             
-            // Update UI with real data
-            document.getElementById('api-calls-today').textContent = stats.callsToday || 0;
-            document.getElementById('api-calls-month').textContent = stats.callsMonth || 0;
-            document.getElementById('total-users').textContent = stats.totalUsers || 1;
+            // If we didn't get database stats, fall back to cached data
+            if (document.getElementById('total-users').textContent === '...') {
+                document.getElementById('total-users').textContent = stats.totalUsers || 1;
+            }
+            
             document.getElementById('rate-limit-hits').textContent = stats.rateLimitHits || 0;
         } else {
             // Fallback to localStorage on error
             const cached = localStorage.getItem('adminUsageData');
             if (cached) {
                 apiUsageData = JSON.parse(cached);
-                document.getElementById('api-calls-today').textContent = apiUsageData.callsToday || 0;
-                document.getElementById('api-calls-month').textContent = apiUsageData.callsMonth || 0;
-                document.getElementById('total-users').textContent = apiUsageData.totalUsers || 1;
+                if (document.getElementById('api-calls-today').textContent === '...') {
+                    document.getElementById('api-calls-today').textContent = apiUsageData.callsToday || 0;
+                }
+                if (document.getElementById('api-calls-month').textContent === '...') {
+                    document.getElementById('api-calls-month').textContent = apiUsageData.callsMonth || 0;
+                }
+                if (document.getElementById('total-users').textContent === '...') {
+                    document.getElementById('total-users').textContent = apiUsageData.totalUsers || 1;
+                }
                 document.getElementById('rate-limit-hits').textContent = apiUsageData.rateLimitHits || 0;
             }
         }
@@ -100,6 +154,7 @@ async function loadAdminData() {
             apiUsageData = JSON.parse(cached);
             document.getElementById('api-calls-today').textContent = apiUsageData.callsToday || 0;
             document.getElementById('api-calls-month').textContent = apiUsageData.callsMonth || 0;
+            document.getElementById('total-users').textContent = apiUsageData.totalUsers || 1;
         }
     }
 }
@@ -334,6 +389,104 @@ function revokeAccess(email) {
         alert('Access revoked');
     }
 }
+
+// Data Migration Tool
+document.getElementById('migrate-data-btn')?.addEventListener('click', async () => {
+    const btn = document.getElementById('migrate-data-btn');
+    const status = document.getElementById('migration-status');
+    const resultsDiv = document.getElementById('migration-results');
+    const reportDiv = document.getElementById('migration-report');
+    
+    // Get localStorage sessions
+    const localSessions = JSON.parse(localStorage.getItem('savedSessions') || '[]');
+    
+    if (localSessions.length === 0) {
+        status.textContent = 'No sessions found in localStorage to migrate.';
+        status.style.color = 'var(--warning)';
+        return;
+    }
+    
+    if (!confirm(`Migrate ${localSessions.length} sessions from localStorage to Supabase?`)) {
+        return;
+    }
+    
+    const user = netlifyIdentity?.currentUser();
+    if (!user) {
+        alert('You must be logged in to migrate data');
+        return;
+    }
+    
+    // Show loading state
+    btn.disabled = true;
+    btn.textContent = 'Migrating...';
+    status.textContent = `Migrating ${localSessions.length} sessions...`;
+    status.style.color = 'var(--primary)';
+    resultsDiv.style.display = 'none';
+    
+    try {
+        const response = await fetch('/.netlify/functions/migrate-localstorage', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                sessions: localSessions,
+                userEmail: user.email
+            })
+        });
+        
+        if (!response.ok) {
+            throw new Error('Migration failed');
+        }
+        
+        const result = await response.json();
+        
+        // Show results
+        btn.textContent = 'Migrate LocalStorage Data';
+        btn.disabled = false;
+        status.textContent = '';
+        resultsDiv.style.display = 'block';
+        
+        let reportHTML = `
+            <div style="background: var(--bg); padding: 16px; border-radius: 8px; margin-top: 12px;">
+                <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-bottom: 16px;">
+                    <div>
+                        <div style="color: var(--text-secondary); font-size: 0.875rem;">Total</div>
+                        <div style="font-size: 1.5rem; font-weight: bold;">${result.results.total}</div>
+                    </div>
+                    <div>
+                        <div style="color: var(--text-secondary); font-size: 0.875rem;">Successful</div>
+                        <div style="font-size: 1.5rem; font-weight: bold; color: var(--success);">${result.results.successful}</div>
+                    </div>
+                    <div>
+                        <div style="color: var(--text-secondary); font-size: 0.875rem;">Failed</div>
+                        <div style="font-size: 1.5rem; font-weight: bold; color: var(--danger);">${result.results.failed}</div>
+                    </div>
+                </div>
+        `;
+        
+        if (result.results.errors.length > 0) {
+            reportHTML += '<h4 style="margin-top: 16px;">Errors:</h4><ul style="margin: 8px 0;">';
+            result.results.errors.forEach(error => {
+                reportHTML += `<li style="color: var(--danger); margin: 4px 0;">${error.session}: ${error.error}</li>`;
+            });
+            reportHTML += '</ul>';
+        }
+        
+        reportHTML += '</div>';
+        reportDiv.innerHTML = reportHTML;
+        
+        if (result.results.successful > 0) {
+            alert(`Migration complete! ${result.results.successful} sessions migrated successfully.`);
+        }
+    } catch (error) {
+        console.error('Migration error:', error);
+        btn.textContent = 'Migrate LocalStorage Data';
+        btn.disabled = false;
+        status.textContent = 'Migration failed. Please try again.';
+        status.style.color = 'var(--danger)';
+    }
+});
 
 // Export functions for use in other scripts
 window.trackApiCall = trackApiCall;

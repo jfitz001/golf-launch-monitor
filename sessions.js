@@ -1,15 +1,79 @@
-// Session Management - LocalStorage
+// Session Management - Supabase with localStorage fallback
 
-function saveSessions(sessions) {
-    localStorage.setItem('golfSessions', JSON.stringify(sessions));
+// Save sessions to Supabase (with localStorage fallback)
+async function saveSessions(session) {
+    const user = netlifyIdentity?.currentUser();
+    
+    if (!user) {
+        console.warn('No user logged in, saving to localStorage only');
+        const localSessions = JSON.parse(localStorage.getItem('savedSessions') || '[]');
+        localSessions.push(session);
+        localStorage.setItem('savedSessions', JSON.stringify(localSessions));
+        return { success: true, offline: true };
+    }
+    
+    try {
+        const response = await fetch('/.netlify/functions/save-session', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                session,
+                userEmail: user.email
+            })
+        });
+        
+        if (!response.ok) {
+            throw new Error('Failed to save session');
+        }
+        
+        const result = await response.json();
+        
+        // Also save to localStorage as backup
+        const localSessions = JSON.parse(localStorage.getItem('savedSessions') || '[]');
+        localSessions.push(session);
+        localStorage.setItem('savedSessions', JSON.stringify(localSessions));
+        
+        return result;
+    } catch (error) {
+        console.error('Error saving to Supabase, falling back to localStorage:', error);
+        const localSessions = JSON.parse(localStorage.getItem('savedSessions') || '[]');
+        localSessions.push(session);
+        localStorage.setItem('savedSessions', JSON.stringify(localSessions));
+        return { success: true, offline: true, error: error.message };
+    }
 }
 
-function loadSessions() {
-    const data = localStorage.getItem('golfSessions');
-    return data ? JSON.parse(data) : [];
+// Load sessions from Supabase (with localStorage fallback)
+async function loadSessions() {
+    const user = netlifyIdentity?.currentUser();
+    
+    if (!user) {
+        // Not logged in, return localStorage only
+        const data = localStorage.getItem('savedSessions');
+        return data ? JSON.parse(data) : [];
+    }
+    
+    try {
+        const response = await fetch(`/.netlify/functions/get-sessions?email=${encodeURIComponent(user.email)}`);
+        
+        if (!response.ok) {
+            throw new Error('Failed to load sessions');
+        }
+        
+        const result = await response.json();
+        
+        // Update localStorage cache
+        localStorage.setItem('savedSessions', JSON.stringify(result.sessions || []));
+        
+        return result.sessions || [];
+    } catch (error) {
+        console.error('Error loading from Supabase, falling back to localStorage:', error);
+        const data = localStorage.getItem('savedSessions');
+        return data ? JSON.parse(data) : [];
+    }
 }
 
-function saveCurrentSession() {
+async function saveCurrentSession() {
     if (!golfData || golfData.length === 0) {
         alert('No data to save');
         return;
@@ -18,52 +82,97 @@ function saveCurrentSession() {
     const sessionName = prompt('Enter session name (e.g., "Range Session - Jan 15")');
     if (!sessionName) return;
     
-    const sessions = loadSessions();
+    // Show loading state
+    const btn = document.getElementById('saveSessionBtn');
+    const originalText = btn.textContent;
+    btn.textContent = 'Saving...';
+    btn.disabled = true;
+    
+    const swingScoreData = calculateSwingScore();
     const session = {
         id: Date.now(),
         name: sessionName,
         date: new Date().toISOString(),
+        timestamp: Date.now(),
         data: golfData,
+        swingScore: {
+            score: swingScoreData.score,
+            description: `${swingScoreData.grade} - ${swingScoreData.desc}`
+        },
         stats: calculateSessionStats()
     };
     
-    sessions.push(session);
-    saveSessions(sessions);
-    currentSessionId = session.id;
-    updateSessionsList();
-    alert('Session saved!');
-    document.getElementById('sessionsPanel').classList.remove('open');
+    const result = await saveSessions(session);
+    
+    btn.textContent = originalText;
+    btn.disabled = false;
+    
+    if (result.success) {
+        currentSessionId = session.id;
+        await updateSessionsList();
+        alert(result.offline ? 'Session saved offline (will sync when online)' : 'Session saved!');
+        document.getElementById('sessionsPanel').classList.remove('open');
+    } else {
+        alert('Error saving session. Please try again.');
+    }
 }
 
-function deleteSessionById(sessionId) {
+async function deleteSessionById(sessionId) {
     if (!confirm('Delete this session?')) return;
     
-    const sessions = loadSessions();
+    const user = netlifyIdentity?.currentUser();
+    
+    if (user) {
+        try {
+            const response = await fetch('/.netlify/functions/delete-session', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    sessionId,
+                    userEmail: user.email
+                })
+            });
+            
+            if (!response.ok) {
+                throw new Error('Failed to delete session');
+            }
+        } catch (error) {
+            console.error('Error deleting from Supabase:', error);
+        }
+    }
+    
+    // Also delete from localStorage
+    const sessions = JSON.parse(localStorage.getItem('savedSessions') || '[]');
     const filtered = sessions.filter(s => s.id !== sessionId);
-    saveSessions(filtered);
+    localStorage.setItem('savedSessions', JSON.stringify(filtered));
     
     if (currentSessionId === sessionId) {
         currentSessionId = null;
     }
     
-    updateSessionsList();
+    await updateSessionsList();
 }
 
-function loadSession(sessionId) {
-    const sessions = loadSessions();
+async function loadSession(sessionId) {
+    const sessions = await loadSessions();
     const session = sessions.find(s => s.id === sessionId);
     
     if (!session) return;
     
     golfData = session.data;
+    localStorage.setItem('currentGolfData', JSON.stringify(golfData));
     displayData();
 }
 
 let currentSessionId = null;
 
-function updateSessionsList() {
+async function updateSessionsList() {
     const listDiv = document.getElementById('sessionsList');
-    const sessions = loadSessions();
+    
+    // Show loading state
+    listDiv.innerHTML = '<div style="text-align: center; color: var(--text-secondary); padding: 40px 20px;">Loading sessions...</div>';
+    
+    const sessions = await loadSessions();
     
     if (sessions.length === 0) {
         listDiv.innerHTML = '<div style="text-align: center; color: var(--text-secondary); padding: 40px 20px;">No sessions saved yet</div>';
@@ -100,21 +209,21 @@ function updateSessionsList() {
     
     // Add event listeners
     document.querySelectorAll('.load-btn').forEach(btn => {
-        btn.addEventListener('click', (e) => {
+        btn.addEventListener('click', async (e) => {
             e.stopPropagation();
             const sessionId = parseInt(btn.dataset.id);
-            loadSession(sessionId);
+            await loadSession(sessionId);
             currentSessionId = sessionId;
-            updateSessionsList();
+            await updateSessionsList();
             document.getElementById('sessionsPanel').classList.remove('open');
         });
     });
     
     document.querySelectorAll('.delete-btn').forEach(btn => {
-        btn.addEventListener('click', (e) => {
+        btn.addEventListener('click', async (e) => {
             e.stopPropagation();
             const sessionId = parseInt(btn.dataset.id);
-            deleteSessionById(sessionId);
+            await deleteSessionById(sessionId);
         });
     });
 }

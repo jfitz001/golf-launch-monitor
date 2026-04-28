@@ -1,7 +1,8 @@
 // Overview page - session-over-session tracking
 
-window.addEventListener('load', () => {
-    const sessions = JSON.parse(localStorage.getItem('savedSessions') || '[]');
+window.addEventListener('load', async () => {
+    // Load sessions from Supabase (will fallback to localStorage if needed)
+    const sessions = await loadSessions();
     const currentData = localStorage.getItem('currentGolfData');
     
     // Check if we have either saved sessions OR a currently loaded session
@@ -395,8 +396,8 @@ function displaySessionHistory(sessions) {
     container.innerHTML = html;
 }
 
-function loadSession(index) {
-    const sessions = JSON.parse(localStorage.getItem('savedSessions') || '[]');
+async function loadSession(index) {
+    const sessions = await loadSessions();
     const session = sessions[index];
     
     if (session && session.data) {
