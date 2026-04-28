@@ -1,5 +1,5 @@
 // Admin functionality
-const ADMIN_EMAIL = 'jamiefitzgerald001@gmail.com';
+const ADMIN_DASHBOARD_EMAIL = 'jamiefitzgerald001@gmail.com';
 
 function withInviteHeaders(baseHeaders = {}) {
     if (typeof window.getInviteAuthHeaders === 'function') {
@@ -18,7 +18,7 @@ function checkAdminAccess() {
         return false;
     }
     
-    if (user.email !== ADMIN_EMAIL) {
+    if (user.email !== ADMIN_DASHBOARD_EMAIL) {
         document.getElementById('admin-content').style.display = 'none';
         document.getElementById('access-denied').style.display = 'block';
         return false;
