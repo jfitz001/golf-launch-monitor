@@ -8,8 +8,9 @@ export default async (req, context) => {
 
   try {
     // Initialize Supabase with service role key
-    const supabaseUrl = process.env.SUPABASE_URL || context.env?.SUPABASE_URL;
-    const supabaseServiceKey = process.env.SUPABASE_SERVICE_KEY || context.env?.SUPABASE_SERVICE_KEY;
+    const projectKey = process.env.PROJECT_KEY || context.env?.PROJECT_KEY;
+    const supabaseUrl = projectKey ? `https://${projectKey}.supabase.co` : null;
+    const supabaseServiceKey = process.env.SERVICE_ROLE_KEY || context.env?.SERVICE_ROLE_KEY;
 
     if (!supabaseUrl || !supabaseServiceKey) {
       return new Response(JSON.stringify({ error: 'Supabase not configured' }), {

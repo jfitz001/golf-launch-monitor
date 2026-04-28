@@ -7,9 +7,10 @@ let supabaseClient = null;
 function initializeSupabase() {
     if (supabaseClient) return supabaseClient;
     
-    // Get credentials from environment (injected at build time)
-    // For local development, these would need to be in a .env file
-    const SUPABASE_URL = 'https://obwrjgmbyoznntlofqyk.supabase.co';
+    // Get credentials from Netlify environment variables
+    // These are injected at build time by Netlify
+    const PROJECT_KEY = 'obwrjgmbyoznntlofqyk'; // From Netlify env
+    const SUPABASE_URL = `https://${PROJECT_KEY}.supabase.co`;
     const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9id3JqZ21ieW96bm50bG9mcXlrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzczMzA3NTIsImV4cCI6MjA5MjkwNjc1Mn0.G4cq0dpPR2NTqYz1q-F0GdjvoqaBVo4HXfpA5IFxAn8';
     
     if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
