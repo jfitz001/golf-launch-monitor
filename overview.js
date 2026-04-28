@@ -1,12 +1,15 @@
 // Overview page - session-over-session tracking
 
+let allSessions = [];
+let selectedClub = 'all';
+
 window.addEventListener('load', async () => {
     // Load sessions from Supabase (will fallback to localStorage if needed)
-    const sessions = await loadSessions();
+    allSessions = await loadSessions();
     const currentData = localStorage.getItem('currentGolfData');
     
     // Check if we have either saved sessions OR a currently loaded session
-    if (sessions.length === 0 && (!currentData || currentData === '[]')) {
+    if (allSessions.length === 0 && (!currentData || currentData === '[]')) {
         document.getElementById('dataLoaded').style.display = 'none';
         document.getElementById('noData').classList.remove('hidden');
         return;
@@ -16,15 +19,100 @@ window.addEventListener('load', async () => {
     document.getElementById('noData').style.display = 'none';
     
     // If we have saved sessions, show full progress tracking
-    if (sessions.length > 0) {
-        displaySummaryStats(sessions);
-        createProgressCharts(sessions);
-        displaySessionHistory(sessions);
+    if (allSessions.length > 0) {
+        // Detect clubs and create filter
+        createClubFilter(allSessions);
+        
+        // Display with selected filter
+        displayFilteredSessions();
     } else {
         // Only have current session - show single session stats
         displayCurrentSessionStats();
     }
 });
+
+function createClubFilter(sessions) {
+    // Extract unique clubs from sessions
+    const clubs = new Set();
+    sessions.forEach(session => {
+        const club = detectClubFromSession(session);
+        if (club && club !== 'Unknown') {
+            clubs.add(club);
+        }
+    });
+    
+    if (clubs.size === 0) {
+        return; // No club data available
+    }
+    
+    // Create filter UI
+    const filterHTML = `
+        <div style="margin-bottom: 24px; display: flex; align-items: center; gap: 12px;">
+            <label style="color: var(--text-secondary); font-weight: 500;">Filter by Club:</label>
+            <select id="clubFilter" style="background: var(--surface); color: var(--text); border: 1px solid var(--border); border-radius: 8px; padding: 8px 16px; font-size: 15px; cursor: pointer;">
+                <option value="all">All Clubs (${sessions.length} sessions)</option>
+                ${Array.from(clubs).sort().map(club => {
+                    const count = sessions.filter(s => detectClubFromSession(s) === club).length;
+                    return `<option value="${club}">${club} (${count} sessions)</option>`;
+                }).join('')}
+            </select>
+        </div>
+    `;
+    
+    const container = document.getElementById('dataLoaded');
+    container.insertAdjacentHTML('afterbegin', filterHTML);
+    
+    // Add change listener
+    document.getElementById('clubFilter').addEventListener('change', (e) => {
+        selectedClub = e.target.value;
+        displayFilteredSessions();
+    });
+}
+
+function detectClubFromSession(session) {
+    // Try to extract club from session data
+    if (session.data && session.data.length > 0) {
+        // Check first shot for club type
+        const firstShot = session.data[0];
+        if (firstShot['Club'] || firstShot['club']) {
+            return firstShot['Club'] || firstShot['club'];
+        }
+    }
+    
+    // Try to extract from session name (e.g., "5 Iron - Jan 15" or "5 iron session")
+    if (session.name) {
+        const match = session.name.match(/(\d+[\s\-]?(iron|wood|hybrid|driver|wedge))/i);
+        if (match) {
+            return match[1].trim();
+        }
+    }
+    
+    // Fallback to club_type if available
+    if (session.club_type) {
+        return session.club_type;
+    }
+    
+    return 'Unknown';
+}
+
+function displayFilteredSessions() {
+    const filteredSessions = selectedClub === 'all' 
+        ? allSessions 
+        : allSessions.filter(s => detectClubFromSession(s) === selectedClub);
+    
+    if (filteredSessions.length === 0) {
+        document.getElementById('dataLoaded').innerHTML = `
+            <p style="text-align: center; color: var(--text-secondary); padding: 40px;">
+                No sessions found for ${selectedClub}
+            </p>
+        `;
+        return;
+    }
+    
+    displaySummaryStats(filteredSessions);
+    createProgressCharts(filteredSessions);
+    displaySessionHistory(filteredSessions);
+}
 
 function displaySummaryStats(sessions) {
     // Total sessions
@@ -300,7 +388,7 @@ function createClubTrendsChart(sessions) {
     // Extract club performance by session
     const clubData = {};
     sessions.forEach((session, idx) => {
-        const club = session.club || 'Unknown';
+        const club = detectClubFromSession(session);
         if (!clubData[club]) clubData[club] = [];
         clubData[club].push({
             session: idx + 1,
@@ -351,14 +439,15 @@ function createClubTrendsChart(sessions) {
 function displaySessionHistory(sessions) {
     const container = document.getElementById('sessionHistory');
     
-    const html = sessions.reverse().map((session, idx) => {
+    const html = sessions.slice().reverse().map((session, idx) => {
         const actualIdx = sessions.length - 1 - idx;
-        const date = new Date(session.timestamp);
+        const date = new Date(session.timestamp || session.date);
         const dateStr = date.toLocaleDateString() + ' ' + date.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+        const club = detectClubFromSession(session);
         
         return `
             <div class="drill-card">
-                <h4>Session ${actualIdx + 1}: ${session.club || 'Unknown Club'}</h4>
+                <h4>Session ${actualIdx + 1}: ${club}</h4>
                 <p style="color: var(--text-secondary); font-size: 13px; margin: 8px 0;">${dateStr}</p>
                 <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; margin-top: 12px;">
                     <div>
@@ -376,7 +465,7 @@ function displaySessionHistory(sessions) {
                     <div>
                         <div style="color: var(--text-secondary); font-size: 12px;">Shots</div>
                         <div style="font-size: 20px; font-weight: 600; color: var(--primary);">
-                            ${session.stats?.shots || 0}
+                            ${session.stats?.shots || session.data?.length || 0}
                         </div>
                     </div>
                     <div>
@@ -397,14 +486,13 @@ function displaySessionHistory(sessions) {
 }
 
 async function loadSession(index) {
-    const sessions = await loadSessions();
-    const session = sessions[index];
+    const session = allSessions[index];
     
     if (session && session.data) {
         localStorage.setItem('currentGolfData', JSON.stringify(session.data));
         localStorage.setItem('golfData', JSON.stringify(session.data));
         localStorage.setItem('lastUploadTime', Date.now().toString());
-        window.location.href = 'index.html';
+        window.location.href = '/upload';
     }
 }
 
