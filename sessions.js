@@ -215,11 +215,24 @@ async function loadSession(sessionId) {
     const sessions = await loadSessions();
     const session = sessions.find(s => s.id === sessionId);
     
-    if (!session) return;
+    if (!session) {
+        alert('Session not found');
+        return;
+    }
     
-    golfData = session.data;
-    localStorage.setItem('currentGolfData', JSON.stringify(golfData));
-    displayData();
+    // Save to localStorage
+    localStorage.setItem('currentGolfData', JSON.stringify(session.data));
+    localStorage.setItem('golfData', JSON.stringify(session.data));
+    localStorage.setItem('lastUploadTime', Date.now().toString());
+    
+    // Update global golfData
+    if (typeof golfData !== 'undefined') {
+        golfData = session.data;
+    }
+    window.golfData = session.data;
+    
+    // Force full reload to refresh all charts and analysis
+    window.location.reload();
 }
 
 let currentSessionId = null;

@@ -668,155 +668,343 @@ function createLaunchChart() {
 // API key is now stored in Netlify environment variables
 // No need for manual entry or localStorage
 
-// Display automatic insights (no API needed)
+// Get club from shot
+function getShotClub(shot) {
+    return shot['Club Name'] || shot['Club Type'] || shot['Club'] || 
+           shot['club'] || shot['Club name'] || shot['club name'] || 
+           shot['ClubName'] || 'Unknown Club';
+}
+
+// Group shots by club
+function groupShotsByClub(shots) {
+    const groups = {};
+    shots.forEach(shot => {
+        const club = getShotClub(shot);
+        if (!groups[club]) groups[club] = [];
+        groups[club].push(shot);
+    });
+    return groups;
+}
+
+// Display automatic insights (no API needed) - PER CLUB
 function displayAutomaticInsights() {
-    const insights = analyzeGolfData(golfData);
     const insightsDiv = document.getElementById('insights');
+    const clubGroups = groupShotsByClub(golfData);
+    const clubs = Object.keys(clubGroups).sort();
     
-    // Get club info - try multiple possible column names
-    const clubNames = golfData.map(s => 
-        s['Club Name'] || 
-        s['Club Type'] || 
-        s['Club'] || 
-        s['club'] || 
-        s['Club name'] || 
-        s['club name'] || 
-        s['ClubName'] ||
-        ''
-    ).filter(c => c);
-    const detectedClub = clubNames.length > 0 ? clubNames[0] : 'Unknown Club';
+    let html = '<div style="line-height: 1.6;">';
     
-    // Calculate key metrics
-    const carryDistances = golfData.map(s => parseFloat(s['Carry Distance']) || 0);
-    const avgCarry = (carryDistances.reduce((a, b) => a + b, 0) / carryDistances.length).toFixed(1);
-    const bestCarry = Math.max(...carryDistances).toFixed(1);
-    const worstCarry = Math.min(...carryDistances.filter(d => d > 0)).toFixed(1);
-    const gapYards = (bestCarry - worstCarry).toFixed(1);
+    // Overall summary at top
+    html += renderOverallSummary(golfData, clubs.length);
     
-    const clubSpeeds = golfData.map(s => parseFloat(s['Club Speed']) || 0);
-    const avgSpeed = (clubSpeeds.reduce((a, b) => a + b, 0) / clubSpeeds.length).toFixed(1);
-    
-    const smashFactors = golfData.map(s => parseFloat(s['Smash Factor']) || 0);
-    const avgSmash = (smashFactors.reduce((a, b) => a + b, 0) / smashFactors.length).toFixed(2);
-    
-    const launchAngles = golfData.map(s => parseFloat(s['Launch Angle']) || 0);
-    const avgLaunch = (launchAngles.reduce((a, b) => a + b, 0) / launchAngles.length).toFixed(1);
-    
-    const backspins = golfData.map(s => parseFloat(s['Backspin']) || 0);
-    const avgSpin = (backspins.reduce((a, b) => a + b, 0) / backspins.length).toFixed(0);
-    
-    const deviations = golfData.map(s => Math.abs(parseFloat(s['Carry Deviation Distance']) || 0));
-    const avgDeviation = (deviations.reduce((a, b) => a + b, 0) / deviations.length).toFixed(1);
-    
-    let html = '<div style="color: var(--text); line-height: 1.8;">';
-    
-    // Club-specific header
-    html += `<div style="background: linear-gradient(135deg, var(--gradient-start), var(--gradient-end)); padding: 20px; border-radius: 8px; margin-bottom: 24px;">
-        <h3 style="margin: 0 0 8px 0; color: white; font-size: 20px;">${detectedClub} Performance Analysis</h3>
-        <div style="color: rgba(255,255,255,0.9); font-size: 14px;">${golfData.length} shots analyzed</div>
-    </div>`;
-    
-    // Key Metrics Summary
-    html += `<div style="background: var(--surface-light); padding: 20px; border-radius: 8px; margin-bottom: 24px;">
-        <h4 style="margin-top: 0; color: var(--text);">Key Metrics</h4>
-        <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; font-size: 14px;">
-            <div>
-                <div style="color: var(--text-secondary);">Distance Range</div>
-                <div style="font-size: 18px; font-weight: 600; color: var(--primary);">${worstCarry} - ${bestCarry} yds</div>
-                <div style="color: var(--text-secondary); font-size: 12px;">Gap: ${gapYards} yards</div>
-            </div>
-            <div>
-                <div style="color: var(--text-secondary);">Average Carry</div>
-                <div style="font-size: 18px; font-weight: 600; color: var(--primary);">${avgCarry} yards</div>
-            </div>
-            <div>
-                <div style="color: var(--text-secondary);">Club Speed</div>
-                <div style="font-size: 18px; font-weight: 600; color: var(--primary);">${avgSpeed} km/h</div>
-            </div>
-            <div>
-                <div style="color: var(--text-secondary);">Smash Factor</div>
-                <div style="font-size: 18px; font-weight: 600; color: var(--primary);">${avgSmash}</div>
-            </div>
-            <div>
-                <div style="color: var(--text-secondary);">Launch Angle</div>
-                <div style="font-size: 18px; font-weight: 600; color: var(--primary);">${avgLaunch}°</div>
-            </div>
-            <div>
-                <div style="color: var(--text-secondary);">Backspin</div>
-                <div style="font-size: 18px; font-weight: 600; color: var(--primary);">${avgSpin} rpm</div>
-            </div>
-        </div>
-    </div>`;
-    
-    // Accuracy Analysis
-    html += `<div style="background: var(--surface-light); padding: 20px; border-radius: 8px; margin-bottom: 24px;">
-        <h4 style="margin-top: 0; color: var(--text);">Accuracy Analysis</h4>
-        <div style="font-size: 14px;">
-            <div style="margin-bottom: 12px;">
-                <strong>Average Miss:</strong> ${avgDeviation} yards offline
-            </div>
-            <div style="margin-bottom: 12px;">
-                <strong>Dispersion:</strong> ${gapYards} yard carry gap (best to worst)
-            </div>
-            <div>
-                <strong>Verdict:</strong> ${avgDeviation < 5 ? '✓ Excellent accuracy' : avgDeviation < 10 ? '⚠ Good accuracy, room for improvement' : '⚠ Work on directional control'}
-            </div>
-        </div>
-    </div>`;
-    
-    // Strengths
-    if (insights.strengths.length > 0) {
-        html += '<div style="background: rgba(16, 185, 129, 0.1); border-left: 4px solid var(--success); padding: 16px; border-radius: 8px; margin-bottom: 16px;">';
-        html += '<h4 style="color: var(--success); margin-top: 0;">What\'s Working Well</h4><ul style="margin: 0;">';
-        insights.strengths.forEach(s => {
-            html += `<li>${s}</li>`;
-        });
-        html += '</ul></div>';
-    }
-    
-    // Critical Issues (High Severity)
-    const criticalIssues = insights.warnings.filter(w => w.severity === 'high');
-    if (criticalIssues.length > 0) {
-        html += '<div style="background: rgba(239, 68, 68, 0.1); border-left: 4px solid var(--danger); padding: 16px; border-radius: 8px; margin-bottom: 16px;">';
-        html += '<h4 style="color: var(--danger); margin-top: 0;">Critical Issues (Fix First)</h4>';
-        criticalIssues.forEach(w => {
-            html += `<div style="margin-bottom: 12px;">
-                <strong>${w.message}</strong><br>
-                <span style="color: var(--text-secondary); font-size: 14px;">${w.detail}</span>
-            </div>`;
-        });
-        html += '</div>';
-    }
-    
-    // Medium Priority Issues
-    const mediumIssues = insights.warnings.filter(w => w.severity === 'medium');
-    if (mediumIssues.length > 0) {
-        html += '<div style="background: rgba(245, 158, 11, 0.1); border-left: 4px solid var(--warning); padding: 16px; border-radius: 8px; margin-bottom: 16px;">';
-        html += '<h4 style="color: var(--warning); margin-top: 0;">Areas for Improvement</h4>';
-        mediumIssues.forEach(w => {
-            html += `<div style="margin-bottom: 12px;">
-                <strong>${w.message}</strong><br>
-                <span style="color: var(--text-secondary); font-size: 14px;">${w.detail}</span>
-            </div>`;
-        });
-        html += '</div>';
-    }
-    
-    // Action Items
-    if (insights.recommendations.length > 0) {
-        html += '<div style="background: var(--surface-light); border-left: 4px solid var(--primary); padding: 16px; border-radius: 8px; margin-bottom: 16px;">';
-        html += '<h4 style="color: var(--primary); margin-top: 0;">Recommended Actions</h4><ol style="margin: 0; padding-left: 20px;">';
-        insights.recommendations.slice(0, 5).forEach(r => {
-            html += `<li style="margin-bottom: 8px;">${r}</li>`;
-        });
-        html += '</ol></div>';
-    }
+    // Per-club analysis
+    clubs.forEach(clubName => {
+        const clubShots = clubGroups[clubName];
+        if (clubShots.length === 0) return;
+        html += renderClubAnalysis(clubName, clubShots);
+    });
     
     html += '</div>';
     insightsDiv.innerHTML = html;
     
-    // Update drills based on recommendations
-    updateDrills(insights);
+    // Add Face-to-path scatter chart and club summary table
+    addFacePathChartAndSummary(golfData, clubGroups);
+    
+    // Update drills based on overall analysis
+    const overallInsights = analyzeGolfData(golfData);
+    updateDrills(overallInsights);
+}
+
+function renderOverallSummary(allShots, clubCount) {
+    const carries = allShots.map(s => parseFloat(s['Carry Distance']) || 0);
+    const avgCarry = (carries.reduce((a,b) => a+b, 0) / carries.length).toFixed(1);
+    const deviations = allShots.map(s => Math.abs(parseFloat(s['Carry Deviation Distance']) || 0));
+    const avgDev = (deviations.reduce((a,b) => a+b, 0) / deviations.length).toFixed(1);
+    
+    return `
+        <div style="background: linear-gradient(to bottom right, #0f172a, #334155); padding: 32px; border-radius: 24px; margin-bottom: 32px; color: white;">
+            <div style="font-size: 13px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.2em; opacity: 0.7; margin-bottom: 8px;">Session Overview</div>
+            <h2 style="margin: 0 0 12px 0; font-size: 32px; font-weight: 700; letter-spacing: -0.025em;">All Clubs Analysis</h2>
+            <p style="opacity: 0.9; margin: 0 0 20px 0; max-width: 700px;">Per-club breakdown below. Each club analyzed separately for accurate insights.</p>
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 16px;">
+                <div><div style="opacity: 0.7; font-size: 12px; text-transform: uppercase; letter-spacing: 0.05em;">Total Shots</div><div style="font-size: 28px; font-weight: 700; margin-top: 4px;">${allShots.length}</div></div>
+                <div><div style="opacity: 0.7; font-size: 12px; text-transform: uppercase; letter-spacing: 0.05em;">Clubs Used</div><div style="font-size: 28px; font-weight: 700; margin-top: 4px;">${clubCount}</div></div>
+                <div><div style="opacity: 0.7; font-size: 12px; text-transform: uppercase; letter-spacing: 0.05em;">Avg Carry</div><div style="font-size: 28px; font-weight: 700; margin-top: 4px;">${avgCarry}<span style="font-size: 14px; opacity: 0.7;"> yd</span></div></div>
+                <div><div style="opacity: 0.7; font-size: 12px; text-transform: uppercase; letter-spacing: 0.05em;">Avg Offline</div><div style="font-size: 28px; font-weight: 700; margin-top: 4px;">${avgDev}<span style="font-size: 14px; opacity: 0.7;"> yd</span></div></div>
+            </div>
+        </div>
+    `;
+}
+
+function renderClubAnalysis(clubName, clubShots) {
+    const insights = analyzeGolfData(clubShots);
+    
+    const carries = clubShots.map(s => parseFloat(s['Carry Distance']) || 0).filter(d => d > 0);
+    const avgCarry = (carries.reduce((a,b) => a+b, 0) / carries.length).toFixed(1);
+    const bestCarry = Math.max(...carries).toFixed(1);
+    const worstCarry = Math.min(...carries).toFixed(1);
+    const gap = (bestCarry - worstCarry).toFixed(1);
+    
+    const speeds = clubShots.map(s => parseFloat(s['Club Speed']) || 0).filter(d => d > 0);
+    const avgSpeed = speeds.length ? (speeds.reduce((a,b) => a+b, 0) / speeds.length).toFixed(1) : '0';
+    
+    const smashes = clubShots.map(s => parseFloat(s['Smash Factor']) || 0).filter(d => d > 0);
+    const avgSmash = smashes.length ? (smashes.reduce((a,b) => a+b, 0) / smashes.length).toFixed(2) : '0';
+    
+    const launches = clubShots.map(s => parseFloat(s['Launch Angle']) || 0);
+    const avgLaunch = (launches.reduce((a,b) => a+b, 0) / launches.length).toFixed(1);
+    
+    const spins = clubShots.map(s => parseFloat(s['Backspin']) || 0);
+    const avgSpin = (spins.reduce((a,b) => a+b, 0) / spins.length).toFixed(0);
+    
+    const devs = clubShots.map(s => Math.abs(parseFloat(s['Carry Deviation Distance']) || 0));
+    const avgDev = (devs.reduce((a,b) => a+b, 0) / devs.length).toFixed(1);
+    
+    const critical = insights.warnings.filter(w => w.severity === 'high');
+    const medium = insights.warnings.filter(w => w.severity === 'medium');
+    
+    let html = `
+        <div style="background: white; border: 1px solid #e2e8f0; border-radius: 16px; padding: 32px; margin-bottom: 24px; box-shadow: 0 1px 3px rgba(0,0,0,0.05);">
+            <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 24px; flex-wrap: wrap; gap: 12px;">
+                <div>
+                    <h3 style="margin: 0; font-size: 24px; font-weight: 700; color: #0f172a; letter-spacing: -0.025em;">${clubName}</h3>
+                    <p style="margin: 4px 0 0 0; color: #64748b; font-size: 14px;">${clubShots.length} shots analyzed</p>
+                </div>
+                <div style="background: #f1f5f9; padding: 8px 16px; border-radius: 999px; font-size: 13px; font-weight: 600; color: #475569;">
+                    ${avgDev < 5 ? '✓ Accurate' : avgDev < 10 ? '⚠ Workable' : '⚠ Needs Work'}
+                </div>
+            </div>
+            
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 16px; margin-bottom: 24px;">
+                <div style="padding: 16px; background: #f8fafc; border-radius: 12px;">
+                    <div style="font-size: 11px; color: #64748b; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em;">Avg Carry</div>
+                    <div style="font-size: 22px; font-weight: 700; color: #0f172a; margin-top: 4px;">${avgCarry} <span style="font-size: 12px; color: #64748b;">yd</span></div>
+                </div>
+                <div style="padding: 16px; background: #f8fafc; border-radius: 12px;">
+                    <div style="font-size: 11px; color: #64748b; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em;">Best Carry</div>
+                    <div style="font-size: 22px; font-weight: 700; color: #0f172a; margin-top: 4px;">${bestCarry} <span style="font-size: 12px; color: #64748b;">yd</span></div>
+                </div>
+                <div style="padding: 16px; background: #f8fafc; border-radius: 12px;">
+                    <div style="font-size: 11px; color: #64748b; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em;">Smash</div>
+                    <div style="font-size: 22px; font-weight: 700; color: #0f172a; margin-top: 4px;">${avgSmash}</div>
+                </div>
+                <div style="padding: 16px; background: #f8fafc; border-radius: 12px;">
+                    <div style="font-size: 11px; color: #64748b; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em;">Launch</div>
+                    <div style="font-size: 22px; font-weight: 700; color: #0f172a; margin-top: 4px;">${avgLaunch}°</div>
+                </div>
+                <div style="padding: 16px; background: #f8fafc; border-radius: 12px;">
+                    <div style="font-size: 11px; color: #64748b; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em;">Spin</div>
+                    <div style="font-size: 22px; font-weight: 700; color: #0f172a; margin-top: 4px;">${avgSpin} <span style="font-size: 12px; color: #64748b;">rpm</span></div>
+                </div>
+                <div style="padding: 16px; background: #f8fafc; border-radius: 12px;">
+                    <div style="font-size: 11px; color: #64748b; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em;">Avg Offline</div>
+                    <div style="font-size: 22px; font-weight: 700; color: #0f172a; margin-top: 4px;">${avgDev} <span style="font-size: 12px; color: #64748b;">yd</span></div>
+                </div>
+            </div>
+    `;
+    
+    if (insights.strengths.length > 0) {
+        html += `<div style="background: #ecfdf5; border-left: 3px solid #10b981; padding: 16px; border-radius: 12px; margin-bottom: 12px;">
+            <div style="font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em; color: #047857; margin-bottom: 8px;">What's Working</div>
+            <ul style="margin: 0; padding-left: 20px; color: #064e3b; font-size: 14px;">${insights.strengths.map(s => `<li style="margin-bottom: 4px;">${s}</li>`).join('')}</ul>
+        </div>`;
+    }
+    
+    if (critical.length > 0) {
+        html += `<div style="background: #fef2f2; border-left: 3px solid #ef4444; padding: 16px; border-radius: 12px; margin-bottom: 12px;">
+            <div style="font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em; color: #b91c1c; margin-bottom: 8px;">Fix First</div>
+            ${critical.map(w => `<div style="font-size: 14px; color: #7f1d1d; margin-bottom: 8px;"><strong>${w.message}</strong><br><span style="color: #991b1b; font-size: 13px;">${w.detail}</span></div>`).join('')}
+        </div>`;
+    }
+    
+    if (medium.length > 0) {
+        html += `<div style="background: #fffbeb; border-left: 3px solid #f59e0b; padding: 16px; border-radius: 12px; margin-bottom: 12px;">
+            <div style="font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em; color: #b45309; margin-bottom: 8px;">Improve</div>
+            ${medium.map(w => `<div style="font-size: 14px; color: #78350f; margin-bottom: 8px;"><strong>${w.message}</strong><br><span style="color: #92400e; font-size: 13px;">${w.detail}</span></div>`).join('')}
+        </div>`;
+    }
+    
+    if (insights.recommendations.length > 0) {
+        html += `<div style="background: #f1f5f9; border-left: 3px solid #0f172a; padding: 16px; border-radius: 12px;">
+            <div style="font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em; color: #334155; margin-bottom: 8px;">Recommended Actions</div>
+            <ol style="margin: 0; padding-left: 20px; color: #1e293b; font-size: 14px;">${insights.recommendations.slice(0, 4).map(r => `<li style="margin-bottom: 4px;">${r}</li>`).join('')}</ol>
+        </div>`;
+    }
+    
+    html += '</div>';
+    return html;
+}
+
+// Add Face-to-path scatter chart and detailed club summary table
+function addFacePathChartAndSummary(allShots, clubGroups) {
+    const insightsDiv = document.getElementById('insights');
+    
+    // Build face-to-path scatter chart
+    const chartId = 'facePathScatterChart';
+    const chartHTML = `
+        <div style="background: white; border: 1px solid #e2e8f0; border-radius: 16px; padding: 32px; margin-top: 24px; box-shadow: 0 1px 3px rgba(0,0,0,0.05);">
+            <h3 style="margin: 0; font-size: 18px; font-weight: 700; color: #0f172a;">Face-to-path vs Offline</h3>
+            <p style="margin: 4px 0 20px 0; color: #64748b; font-size: 14px;">Key relationship for the right miss. Higher positive face-to-path often leaks right.</p>
+            <div style="height: 400px; position: relative;"><canvas id="${chartId}"></canvas></div>
+        </div>
+        ${renderClubSummaryTable(clubGroups)}
+    `;
+    
+    insightsDiv.insertAdjacentHTML('beforeend', chartHTML);
+    
+    // Render the scatter chart
+    setTimeout(() => renderFacePathScatter(chartId, allShots, clubGroups), 100);
+}
+
+const CLUB_COLORS = {
+    'Gap Wedge': '#8b5cf6', 'Pitching Wedge': '#a78bfa', 'Sand Wedge': '#7c3aed',
+    'Lob Wedge': '#6d28d9', '9 Iron': '#06b6d4', '8 Iron': '#22c55e',
+    '7 Iron': '#10b981', '6 Iron': '#059669', '5 Iron': '#f59e0b',
+    '4 Iron': '#d97706', '3 Iron': '#b45309', '4 Hybrid': '#ef4444',
+    '3 Hybrid': '#dc2626', '5 Hybrid': '#f87171', '5 Wood': '#3b82f6',
+    '3 Wood': '#2563eb', '7 Wood': '#1d4ed8', 'Driver': '#1e40af'
+};
+
+function getClubColor(club) {
+    return CLUB_COLORS[club] || '#64748b';
+}
+
+function renderFacePathScatter(canvasId, allShots, clubGroups) {
+    const canvas = document.getElementById(canvasId);
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    
+    // Build datasets per club
+    const datasets = Object.keys(clubGroups).map(club => ({
+        label: club,
+        data: clubGroups[club].map(s => {
+            const path = parseFloat(s['Club Path']) || 0;
+            const face = parseFloat(s['Club Face']) || 0;
+            const offline = parseFloat(s['Carry Deviation Distance']) || 0;
+            return { x: face - path, y: offline };
+        }).filter(d => !isNaN(d.x) && !isNaN(d.y) && (d.x !== 0 || d.y !== 0)),
+        backgroundColor: getClubColor(club),
+        borderColor: getClubColor(club),
+        pointRadius: 5,
+        pointHoverRadius: 7
+    })).filter(d => d.data.length > 0);
+    
+    new Chart(ctx, {
+        type: 'scatter',
+        data: { datasets },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: { position: 'top', labels: { color: '#0f172a', font: { size: 12 } } },
+                tooltip: {
+                    callbacks: {
+                        label: (ctx) => `${ctx.dataset.label}: F2P ${ctx.parsed.x.toFixed(1)}°, Offline ${ctx.parsed.y.toFixed(1)} yd`
+                    }
+                }
+            },
+            scales: {
+                x: {
+                    title: { display: true, text: 'Face-to-Path (°)', color: '#64748b' },
+                    grid: { color: '#e2e8f0' },
+                    ticks: { color: '#64748b' }
+                },
+                y: {
+                    title: { display: true, text: 'Offline (yd)', color: '#64748b' },
+                    grid: { color: '#e2e8f0' },
+                    ticks: { color: '#64748b' }
+                }
+            }
+        }
+    });
+}
+
+function renderClubSummaryTable(clubGroups) {
+    const rows = Object.keys(clubGroups).map(club => {
+        const shots = clubGroups[club];
+        const carries = shots.map(s => parseFloat(s['Carry Distance']) || 0).filter(d => d > 0);
+        const smashes = shots.map(s => parseFloat(s['Smash Factor']) || 0).filter(d => d > 0);
+        // "Clean" = smash factor > 1.1 and carry > 50% of avg
+        const avgCarryAll = carries.reduce((a,b) => a+b, 0) / Math.max(carries.length, 1);
+        const cleanShots = shots.filter(s => {
+            const c = parseFloat(s['Carry Distance']) || 0;
+            const sm = parseFloat(s['Smash Factor']) || 0;
+            return sm >= 1.1 && c >= avgCarryAll * 0.5;
+        });
+        const cleanCarries = cleanShots.map(s => parseFloat(s['Carry Distance']) || 0);
+        const cleanSmashes = cleanShots.map(s => parseFloat(s['Smash Factor']) || 0);
+        const cleanPaths = cleanShots.map(s => parseFloat(s['Club Path']) || 0);
+        const cleanFaces = cleanShots.map(s => parseFloat(s['Club Face']) || 0);
+        const cleanSpins = cleanShots.map(s => parseFloat(s['Backspin']) || 0);
+        const cleanOffline = cleanShots.map(s => Math.abs(parseFloat(s['Carry Deviation Distance']) || 0));
+        
+        const avg = (arr) => arr.length ? arr.reduce((a,b) => a+b, 0) / arr.length : 0;
+        const median = (arr) => {
+            if (!arr.length) return 0;
+            const sorted = [...arr].sort((a,b) => a-b);
+            const mid = Math.floor(sorted.length / 2);
+            return sorted.length % 2 ? sorted[mid] : (sorted[mid-1] + sorted[mid]) / 2;
+        };
+        
+        const avgCarry = avg(cleanCarries);
+        const bestCarry = cleanCarries.length ? Math.max(...cleanCarries) : 0;
+        const avgSmash = avg(cleanSmashes);
+        const avgPath = avg(cleanPaths);
+        const avgFace = avg(cleanFaces);
+        const ftp = avgFace - avgPath;
+        const avgSpin = avg(cleanSpins);
+        const medOffline = median(cleanOffline);
+        
+        return { club, shots: shots.length, clean: cleanShots.length, avgCarry, bestCarry, avgSmash, avgPath, avgFace, ftp, avgSpin, medOffline };
+    });
+    
+    const fmt = (n, d=1) => isNaN(n) || n === null ? '—' : Number(n).toFixed(d);
+    const signed = (n) => isNaN(n) ? '—' : (n > 0 ? '+' : '') + n.toFixed(1);
+    
+    let html = `
+        <div style="background: white; border: 1px solid #e2e8f0; border-radius: 16px; padding: 32px; margin-top: 24px; box-shadow: 0 1px 3px rgba(0,0,0,0.05);">
+            <h3 style="margin: 0; font-size: 18px; font-weight: 700; color: #0f172a;">Club Summary</h3>
+            <p style="margin: 4px 0 20px 0; color: #64748b; font-size: 14px;">Clean swings only for averages. Smash 1.10+ and carry within 50% of avg.</p>
+            <div style="overflow-x: auto;">
+                <table style="width: 100%; min-width: 900px; border-collapse: collapse; font-size: 14px;">
+                    <thead>
+                        <tr style="border-bottom: 1px solid #e2e8f0; text-align: left; font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; color: #64748b;">
+                            <th style="padding: 12px 8px;">Club</th>
+                            <th style="padding: 12px 8px; text-align: right;">Shots</th>
+                            <th style="padding: 12px 8px; text-align: right;">Clean</th>
+                            <th style="padding: 12px 8px; text-align: right;">Avg Carry</th>
+                            <th style="padding: 12px 8px; text-align: right;">Best Carry</th>
+                            <th style="padding: 12px 8px; text-align: right;">Smash</th>
+                            <th style="padding: 12px 8px; text-align: right;">Path</th>
+                            <th style="padding: 12px 8px; text-align: right;">Face</th>
+                            <th style="padding: 12px 8px; text-align: right;">F2P</th>
+                            <th style="padding: 12px 8px; text-align: right;">Spin</th>
+                            <th style="padding: 12px 8px; text-align: right;">Med Offline</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+    `;
+    
+    rows.forEach(r => {
+        html += `
+            <tr style="border-bottom: 1px solid #f1f5f9; transition: background 0.2s;" onmouseover="this.style.background='#f8fafc'" onmouseout="this.style.background='white'">
+                <td style="padding: 14px 8px; font-weight: 600; color: #0f172a;"><span style="display: inline-block; width: 10px; height: 10px; border-radius: 50%; background: ${getClubColor(r.club)}; margin-right: 8px; vertical-align: middle;"></span>${r.club}</td>
+                <td style="padding: 14px 8px; text-align: right; color: #475569;">${r.shots}</td>
+                <td style="padding: 14px 8px; text-align: right; color: #475569;">${r.clean}</td>
+                <td style="padding: 14px 8px; text-align: right; color: #0f172a;">${fmt(r.avgCarry)} yd</td>
+                <td style="padding: 14px 8px; text-align: right; color: #0f172a;">${fmt(r.bestCarry)} yd</td>
+                <td style="padding: 14px 8px; text-align: right; color: #0f172a;">${fmt(r.avgSmash, 2)}</td>
+                <td style="padding: 14px 8px; text-align: right; color: #475569;">${signed(r.avgPath)}°</td>
+                <td style="padding: 14px 8px; text-align: right; color: #475569;">${signed(r.avgFace)}°</td>
+                <td style="padding: 14px 8px; text-align: right; font-weight: 700; color: #0f172a;">${signed(r.ftp)}°</td>
+                <td style="padding: 14px 8px; text-align: right; color: #475569;">${fmt(r.avgSpin, 0)}</td>
+                <td style="padding: 14px 8px; text-align: right; color: #0f172a;">${fmt(r.medOffline)} yd</td>
+            </tr>
+        `;
+    });
+    
+    html += '</tbody></table></div></div>';
+    return html;
 }
 
 function updateDrills(insights) {
