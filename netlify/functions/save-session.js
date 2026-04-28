@@ -21,8 +21,20 @@ export default async (req, context) => {
     const supabaseUrl = projectKey ? `https://${projectKey}.supabase.co` : null;
     const supabaseServiceKey = process.env.SERVICE_ROLE_KEY || context.env?.SERVICE_ROLE_KEY;
 
+    console.log('Save session - Supabase config:', {
+      hasProjectKey: !!projectKey,
+      hasServiceKey: !!supabaseServiceKey
+    });
+
     if (!supabaseUrl || !supabaseServiceKey) {
-      return new Response(JSON.stringify({ error: 'Supabase not configured' }), {
+      const missing = [];
+      if (!projectKey) missing.push('PROJECT_KEY');
+      if (!supabaseServiceKey) missing.push('SERVICE_ROLE_KEY');
+      return new Response(JSON.stringify({ 
+        error: 'Supabase not configured',
+        missing: missing,
+        hint: 'Set PROJECT_KEY and SERVICE_ROLE_KEY in Netlify Environment Variables'
+      }), {
         status: 500,
         headers: { 'Content-Type': 'application/json' }
       });
