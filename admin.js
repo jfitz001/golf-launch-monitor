@@ -1,13 +1,6 @@
 // Admin functionality
 const ADMIN_DASHBOARD_EMAIL = 'jamiefitzgerald001@gmail.com';
 
-function withInviteHeaders(baseHeaders = {}) {
-    if (typeof window.getInviteAuthHeaders === 'function') {
-        return window.getInviteAuthHeaders(baseHeaders);
-    }
-    return { ...baseHeaders };
-}
-
 // Check if user is admin
 function checkAdminAccess() {
     const user = netlifyIdentity.currentUser();
@@ -29,14 +22,23 @@ function checkAdminAccess() {
     return true;
 }
 
-// Initialize admin dashboard
-window.addEventListener('load', () => {
+// Initialize admin after auth ready
+function initAdmin() {
     if (checkAdminAccess()) {
         loadAdminData();
-        // Auto-refresh every 30 seconds
         setInterval(loadAdminData, 30000);
     }
-});
+}
+
+// Wait for Netlify Identity to be ready
+if (typeof netlifyIdentity !== 'undefined') {
+    netlifyIdentity.on('init', user => {
+        if (user) initAdmin();
+    });
+    netlifyIdentity.on('login', user => {
+        initAdmin();
+    });
+}
 
 // Store data in memory
 let apiUsageData = {
@@ -66,7 +68,7 @@ async function loadAdminData() {
         
         // Fetch real database stats from Supabase
         const dbStatsResponse = await fetch('/.netlify/functions/get-database-stats', {
-            headers: withInviteHeaders()
+            headers: { 'Content-Type': 'application/json' }
         });
         if (dbStatsResponse.ok) {
             const dbStats = await dbStatsResponse.json();
@@ -118,7 +120,7 @@ async function loadAdminData() {
         
         const response = await fetch('/.netlify/functions/get-usage-stats', {
             method: 'GET',
-            headers: withInviteHeaders({
+            headers: {
                 'Authorization': `Bearer ${token}`,
                 'Content-Type': 'application/json'
             })
@@ -209,7 +211,7 @@ async function loadUserList() {
         // Pass admin email to verify authorization
         const response = await fetch(`/.netlify/functions/get-users?admin=${encodeURIComponent(currentUser.email)}`, {
             method: 'GET',
-            headers: withInviteHeaders({
+            headers: {
                 'Content-Type': 'application/json'
             })
         });
@@ -297,7 +299,7 @@ async function loadRateLimitConfig() {
 
     const response = await fetch(`/.netlify/functions/get-rate-limits?admin=${encodeURIComponent(currentUser.email)}`, {
         method: 'GET',
-        headers: withInviteHeaders({
+        headers: {
             'Content-Type': 'application/json'
         })
     });
@@ -327,7 +329,7 @@ document.getElementById('save-rate-limits').addEventListener('click', async () =
 
     const response = await fetch('/.netlify/functions/set-rate-limits', {
         method: 'POST',
-        headers: withInviteHeaders({
+        headers: {
             'Content-Type': 'application/json'
         }),
         body: JSON.stringify({
@@ -361,7 +363,7 @@ async function trackApiCall(endpoint, status, responseTime) {
         // Send to backend
         await fetch('/.netlify/functions/track-api-usage', {
             method: 'POST',
-            headers: withInviteHeaders({
+            headers: {
                 'Content-Type': 'application/json'
             }),
             body: JSON.stringify(callData)
@@ -394,7 +396,7 @@ async function checkRateLimit(endpoint = 'app-action') {
         
         const response = await fetch('/.netlify/functions/check-rate-limit', {
             method: 'POST',
-            headers: withInviteHeaders({
+            headers: {
                 'Content-Type': 'application/json'
             }),
             body: JSON.stringify({ userEmail, endpoint })
@@ -457,7 +459,7 @@ async function updateUserAccess(email, updates) {
 
     const response = await fetch('/.netlify/functions/set-user-access', {
         method: 'POST',
-        headers: withInviteHeaders({
+        headers: {
             'Content-Type': 'application/json'
         }),
         body: JSON.stringify({
@@ -485,7 +487,7 @@ async function addUserByEmail() {
 
     const response = await fetch('/.netlify/functions/upsert-user', {
         method: 'POST',
-        headers: withInviteHeaders({
+        headers: {
             'Content-Type': 'application/json'
         }),
         body: JSON.stringify({
@@ -539,7 +541,7 @@ document.getElementById('migrate-data-btn')?.addEventListener('click', async () 
     try {
         const response = await fetch('/.netlify/functions/migrate-localstorage', {
             method: 'POST',
-            headers: withInviteHeaders({
+            headers: {
                 'Content-Type': 'application/json'
             }),
             body: JSON.stringify({
