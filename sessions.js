@@ -74,8 +74,24 @@ async function loadSessions() {
 }
 
 async function saveCurrentSession() {
-    if (!golfData || golfData.length === 0) {
-        alert('No data to save');
+    // Check for golfData (from app.js) or currentGolfData (from localStorage)
+    let dataToSave = [];
+    
+    if (typeof golfData !== 'undefined' && golfData && golfData.length > 0) {
+        dataToSave = golfData;
+    } else {
+        const storedData = localStorage.getItem('currentGolfData');
+        if (storedData) {
+            try {
+                dataToSave = JSON.parse(storedData);
+            } catch (e) {
+                console.error('Error parsing stored data:', e);
+            }
+        }
+    }
+    
+    if (!dataToSave || dataToSave.length === 0) {
+        alert('No data to save. Please upload a CSV file first.');
         return;
     }
     
@@ -88,18 +104,22 @@ async function saveCurrentSession() {
     btn.textContent = 'Saving...';
     btn.disabled = true;
     
-    const swingScoreData = calculateSwingScore();
+    // Use the data we found to calculate stats
+    const tempGolfData = dataToSave;
+    const swingScoreData = typeof calculateSwingScore !== 'undefined' ? calculateSwingScore() : { score: 0, grade: 'N/A', desc: 'Not calculated' };
+    const stats = typeof calculateSessionStats !== 'undefined' ? calculateSessionStats() : {};
+    
     const session = {
         id: Date.now(),
         name: sessionName,
         date: new Date().toISOString(),
         timestamp: Date.now(),
-        data: golfData,
+        data: tempGolfData,
         swingScore: {
             score: swingScoreData.score,
             description: `${swingScoreData.grade} - ${swingScoreData.desc}`
         },
-        stats: calculateSessionStats()
+        stats: stats
     };
     
     const result = await saveSessions(session);
@@ -172,60 +192,65 @@ async function updateSessionsList() {
     // Show loading state
     listDiv.innerHTML = '<div style="text-align: center; color: var(--text-secondary); padding: 40px 20px;">Loading sessions...</div>';
     
-    const sessions = await loadSessions();
-    
-    if (sessions.length === 0) {
-        listDiv.innerHTML = '<div style="text-align: center; color: var(--text-secondary); padding: 40px 20px;">No sessions saved yet</div>';
-        return;
-    }
-    
-    listDiv.innerHTML = '';
-    
-    sessions.sort((a, b) => new Date(b.date) - new Date(a.date)).forEach(session => {
-        const div = document.createElement('div');
-        div.className = 'session-item';
-        if (session.id === currentSessionId) {
-            div.classList.add('active');
+    try {
+        const sessions = await loadSessions();
+        
+        if (sessions.length === 0) {
+            listDiv.innerHTML = '<div style="text-align: center; color: var(--text-secondary); padding: 40px 20px;">No sessions saved yet</div>';
+            return;
         }
         
-        const date = new Date(session.date);
-        const dateStr = date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-        const timeStr = date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+        listDiv.innerHTML = '';
         
-        div.innerHTML = `
-            <div class="session-item-name">${session.name}</div>
-            <div class="session-item-meta">
-                <span>${dateStr} at ${timeStr}</span>
-                <span>${session.data.length} shots</span>
-            </div>
-            <div class="session-item-actions">
-                <button class="session-item-btn load-btn" data-id="${session.id}">Load</button>
-                <button class="session-item-btn delete delete-btn" data-id="${session.id}">Delete</button>
-            </div>
-        `;
+        sessions.sort((a, b) => new Date(b.date) - new Date(a.date)).forEach(session => {
+            const div = document.createElement('div');
+            div.className = 'session-item';
+            if (session.id === currentSessionId) {
+                div.classList.add('active');
+            }
+            
+            const date = new Date(session.date);
+            const dateStr = date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+            const timeStr = date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+            
+            div.innerHTML = `
+                <div class="session-item-name">${session.name}</div>
+                <div class="session-item-meta">
+                    <span>${dateStr} at ${timeStr}</span>
+                    <span>${session.data.length} shots</span>
+                </div>
+                <div class="session-item-actions">
+                    <button class="session-item-btn load-btn" data-id="${session.id}">Load</button>
+                    <button class="session-item-btn delete delete-btn" data-id="${session.id}">Delete</button>
+                </div>
+            `;
+            
+            listDiv.appendChild(div);
+        });
         
-        listDiv.appendChild(div);
-    });
-    
-    // Add event listeners
-    document.querySelectorAll('.load-btn').forEach(btn => {
-        btn.addEventListener('click', async (e) => {
-            e.stopPropagation();
-            const sessionId = parseInt(btn.dataset.id);
-            await loadSession(sessionId);
-            currentSessionId = sessionId;
-            await updateSessionsList();
-            document.getElementById('sessionsPanel').classList.remove('open');
+        // Add event listeners
+        document.querySelectorAll('.load-btn').forEach(btn => {
+            btn.addEventListener('click', async (e) => {
+                e.stopPropagation();
+                const sessionId = parseInt(btn.dataset.id);
+                await loadSession(sessionId);
+                currentSessionId = sessionId;
+                await updateSessionsList();
+                document.getElementById('sessionsPanel').classList.remove('open');
+            });
         });
-    });
-    
-    document.querySelectorAll('.delete-btn').forEach(btn => {
-        btn.addEventListener('click', async (e) => {
-            e.stopPropagation();
-            const sessionId = parseInt(btn.dataset.id);
-            await deleteSessionById(sessionId);
+        
+        document.querySelectorAll('.delete-btn').forEach(btn => {
+            btn.addEventListener('click', async (e) => {
+                e.stopPropagation();
+                const sessionId = parseInt(btn.dataset.id);
+                await deleteSessionById(sessionId);
+            });
         });
-    });
+    } catch (error) {
+        console.error('Error updating sessions list:', error);
+        listDiv.innerHTML = '<div style="text-align: center; color: var(--text-secondary); padding: 40px 20px;">Error loading sessions. Using local storage.</div>';
+    }
 }
 
 function calculateSessionStats() {

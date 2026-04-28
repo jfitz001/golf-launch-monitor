@@ -73,6 +73,10 @@ const loginBtn = document.getElementById('login-btn');
 const logoutBtn = document.getElementById('logout-btn');
 const userEmail = document.getElementById('user-email');
 
+// Hide both sections initially to prevent flash
+if (authSection) authSection.style.display = 'none';
+if (appSection) appSection.style.display = 'none';
+
 // Initialize on page load
 netlifyIdentity.init();
 
