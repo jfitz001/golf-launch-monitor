@@ -22,29 +22,30 @@
 
     <!-- App Section -->
     <div id="app-section">
-        <header>
-            <div style="display: flex; justify-content: space-between; align-items: center;">
-                <div>
-                    <h1>Admin Dashboard</h1>
-                    <p>Manage API limits and system settings</p>
+        <div class="container">
+            <header>
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                    <div>
+                        <h1>Admin Dashboard</h1>
+                        <p class="subtitle">Manage API limits and system settings</p>
+                    </div>
+                    <div class="user-bar">
+                        <span id="user-email" style="margin-right: 16px; color: var(--text-secondary);"></span>
+                        <button id="logout-btn" class="secondary-button">Logout</button>
+                    </div>
                 </div>
-                <div class="user-bar">
-                    <span id="user-email"></span>
-                    <button id="logout-btn" class="secondary-button">Logout</button>
-                </div>
-            </div>
-            <nav style="margin-top: 20px;">
-                <a href="index.html" class="nav-link">Upload</a>
-                <a href="overview.html" class="nav-link">Progress</a>
-                <a href="charts.html" class="nav-link">Charts</a>
-                <a href="analysis.html" class="nav-link">Analysis</a>
-                <a href="training.html" class="nav-link">Training</a>
-                <a href="data-table.html" class="nav-link">Data</a>
-                <a href="admin.html" class="nav-link active">Admin</a>
-            </nav>
-        </header>
+                <nav style="margin-top: 20px;">
+                    <a href="index.html" class="nav-link">Upload</a>
+                    <a href="overview.html" class="nav-link">Progress</a>
+                    <a href="charts.html" class="nav-link">Charts</a>
+                    <a href="analysis.html" class="nav-link">Analysis</a>
+                    <a href="training.html" class="nav-link">Training</a>
+                    <a href="data-table.html" class="nav-link">Data</a>
+                    <a href="admin.html" class="nav-link active">Admin</a>
+                </nav>
+            </header>
 
-        <div id="admin-content" class="container" style="display: none;">
+        <div id="admin-content" style="display: none;">
             <!-- API Usage Stats -->
             <div class="admin-section">
                 <h2>API Usage Statistics</h2>
@@ -133,9 +134,10 @@
                 </div>
             </div>
         </div>
+        </div> <!-- End container -->
 
-        <div id="access-denied" class="container" style="display: none;">
-            <div class="auth-card" style="margin-top: 100px;">
+        <div id="access-denied" style="display: none; margin-top: 100px;">
+            <div class="auth-card">
                 <h2>Access Denied</h2>
                 <p>You don't have permission to access the admin dashboard.</p>
                 <a href="index.html" class="primary-button" style="display: inline-block; text-decoration: none; margin-top: 20px;">Go to Dashboard</a>

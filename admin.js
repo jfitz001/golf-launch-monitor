@@ -127,25 +127,47 @@ async function loadUserList() {
     const tbody = document.getElementById('user-list-body');
     
     try {
-        // Fetch users from Netlify Identity
-        const currentUser = netlifyIdentity.currentUser();
+        // Show loading state
+        tbody.innerHTML = '<tr><td colspan="4" class="empty-log">Loading users...</td></tr>';
         
-        // For now, show current user and any cached users
-        const users = apiUsageData.users || [];
-        
-        // Add current user if not in list
-        if (currentUser && !users.find(u => u.email === currentUser.email)) {
-            users.push({
-                email: currentUser.email,
-                role: currentUser.email === ADMIN_EMAIL ? 'admin' : 'user',
-                lastActive: new Date().toISOString()
-            });
+        // Fetch users from backend
+        const currentUser = netlifyIdentity?.currentUser();
+        if (!currentUser) {
+            tbody.innerHTML = '<tr><td colspan="4" class="empty-log">Not authenticated</td></tr>';
+            return;
         }
+        
+        const token = await currentUser.jwt();
+        
+        const response = await fetch('/.netlify/functions/get-users', {
+            method: 'GET',
+            headers: {
+                'Authorization': `Bearer ${token}`,
+                'Content-Type': 'application/json'
+            }
+        });
+        
+        if (!response.ok) {
+            throw new Error(`HTTP ${response.status}`);
+        }
+        
+        const data = await response.json();
+        const users = data.users || [];
+        
+        // Update total users count
+        document.getElementById('total-users').textContent = users.length;
         
         if (users.length === 0) {
             tbody.innerHTML = '<tr><td colspan="4" class="empty-log">No users found</td></tr>';
             return;
         }
+        
+        // Sort users - admin first, then by email
+        users.sort((a, b) => {
+            if (a.role === 'admin' && b.role !== 'admin') return -1;
+            if (a.role !== 'admin' && b.role === 'admin') return 1;
+            return a.email.localeCompare(b.email);
+        });
         
         tbody.innerHTML = users.map(user => `
             <tr>
@@ -159,9 +181,44 @@ async function loadUserList() {
                 </td>
             </tr>
         `).join('');
+        
+        // Cache users for offline access
+        apiUsageData.users = users;
+        localStorage.setItem('adminUsageData', JSON.stringify(apiUsageData));
+        
     } catch (error) {
         console.error('Failed to load users:', error);
-        tbody.innerHTML = '<tr><td colspan="4" class="empty-log">Error loading users</td></tr>';
+        
+        // Fallback to cached users
+        const cached = localStorage.getItem('adminUsageData');
+        if (cached) {
+            const data = JSON.parse(cached);
+            const users = data.users || [];
+            
+            if (users.length > 0) {
+                tbody.innerHTML = users.map(user => `
+                    <tr>
+                        <td>${user.email}</td>
+                        <td>${user.role === 'admin' ? '<span class="role-badge">Admin</span>' : 'User'}</td>
+                        <td>${new Date(user.lastActive).toLocaleDateString()}</td>
+                        <td>
+                            <div class="user-actions">
+                                ${user.role !== 'admin' ? '<button class="btn-revoke" onclick="revokeAccess(\'' + user.email + '\')">Revoke</button>' : '-'}
+                            </div>
+                        </td>
+                    </tr>
+                `).join('');
+                
+                // Show note about cached data
+                const note = document.createElement('tr');
+                note.innerHTML = '<td colspan="4" style="text-align: center; color: var(--warning); font-size: 0.875rem; padding: 8px;">Showing cached data (offline)</td>';
+                tbody.appendChild(note);
+            } else {
+                tbody.innerHTML = '<tr><td colspan="4" class="empty-log">Error loading users</td></tr>';
+            }
+        } else {
+            tbody.innerHTML = '<tr><td colspan="4" class="empty-log">Error loading users</td></tr>';
+        }
     }
 }
 
