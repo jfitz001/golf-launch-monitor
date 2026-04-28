@@ -55,11 +55,10 @@ function parseCSV(text) {
     const lines = text.split('\n');
     const headers = lines[0].split(',').map(h => h.trim());
     
-    // Log headers to console for debugging
     console.log('CSV Headers found:', headers);
     
-    golfData = [];
-    window.golfData = golfData;
+    // Parse shots
+    const shots = [];
     for (let i = 2; i < lines.length; i++) {
         if (!lines[i].trim()) continue;
         
@@ -68,23 +67,21 @@ function parseCSV(text) {
         headers.forEach((header, index) => {
             shot[header] = values[index] ? values[index].trim() : '';
         });
-        golfData.push(shot);
+        shots.push(shot);
     }
     
-    // Log first shot to see what data we have
-    if (golfData.length > 0) {
-        console.log('First shot data:', golfData[0]);
-        console.log('Available columns:', Object.keys(golfData[0]));
+    // Set both local and global
+    golfData = shots;
+    window.golfData = shots;
+    
+    console.log('Parsed shots:', shots.length);
+    if (shots.length > 0) {
+        console.log('First shot:', shots[0]);
     }
     
-    // Ensure window.golfData is in sync
-    window.golfData = golfData;
-    
-    // Save data to localStorage for data table page
-    localStorage.setItem('currentGolfData', JSON.stringify(golfData));
-    localStorage.setItem('golfData', JSON.stringify(golfData));
-    
-    // Mark as new upload (timestamp)
+    // Save to localStorage
+    localStorage.setItem('currentGolfData', JSON.stringify(shots));
+    localStorage.setItem('golfData', JSON.stringify(shots));
     localStorage.setItem('lastUploadTime', Date.now().toString());
     
     displayData();
