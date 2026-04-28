@@ -141,8 +141,12 @@ function displayData() {
     // Run pure JS analysis
     displayAutomaticInsights();
     
-    // Calculate swing score
-    updateSwingScore();
+    // Calculate swing score (check if elements exist)
+    if (typeof updateSwingScore === 'function') {
+        updateSwingScore();
+    } else {
+        console.warn('updateSwingScore function not found');
+    }
 }
 
 function calculateStdDev(values) {

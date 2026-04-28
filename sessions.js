@@ -282,6 +282,11 @@ function calculateSessionStats() {
 }
 
 function calculateSwingScore() {
+    // Safety check
+    if (!golfData || golfData.length === 0) {
+        return { score: 0, grade: 'N/A', desc: 'No data' };
+    }
+    
     const insights = analyzeGolfData(golfData);
     
     // Start at 100, deduct for issues
@@ -329,10 +334,24 @@ function calculateSwingScore() {
 }
 
 function updateSwingScore() {
-    const result = calculateSwingScore();
+    // Check if we have data
+    if (!golfData || golfData.length === 0) {
+        console.warn('No data available for swing score');
+        document.getElementById('swingScore').textContent = '--';
+        document.getElementById('swingScoreDesc').textContent = 'Upload data to analyze';
+        return;
+    }
     
-    document.getElementById('swingScore').textContent = result.score;
-    document.getElementById('swingScoreDesc').textContent = `${result.grade} - ${result.desc}`;
+    try {
+        const result = calculateSwingScore();
+        
+        document.getElementById('swingScore').textContent = result.score;
+        document.getElementById('swingScoreDesc').textContent = `${result.grade} - ${result.desc}`;
+    } catch (error) {
+        console.error('Error calculating swing score:', error);
+        document.getElementById('swingScore').textContent = '--';
+        document.getElementById('swingScoreDesc').textContent = 'Error calculating score';
+    }
 }
 
 // Event listeners
