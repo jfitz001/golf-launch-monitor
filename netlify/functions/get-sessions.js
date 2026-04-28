@@ -1,5 +1,5 @@
 // Get all golf sessions for the current user
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { createClient } from '@supabase/supabase-js';
 
 export default async (req, context) => {
   if (req.method !== 'GET' && req.method !== 'POST') {

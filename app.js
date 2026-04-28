@@ -13,27 +13,32 @@ window.addEventListener('load', () => {
 });
 
 // CSV Upload Handler
-document.getElementById('csvFile').addEventListener('change', handleFileUpload);
+const csvFileInput = document.getElementById('csvFile');
+if (csvFileInput) {
+    csvFileInput.addEventListener('change', handleFileUpload);
+}
 
 // Drag and drop
 const uploadCard = document.querySelector('.upload-card');
-uploadCard.addEventListener('dragover', (e) => {
-    e.preventDefault();
-    uploadCard.style.borderColor = 'var(--primary)';
-});
+if (uploadCard) {
+    uploadCard.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        uploadCard.style.borderColor = 'var(--primary)';
+    });
 
-uploadCard.addEventListener('dragleave', () => {
-    uploadCard.style.borderColor = 'var(--border)';
-});
+    uploadCard.addEventListener('dragleave', () => {
+        uploadCard.style.borderColor = 'var(--border)';
+    });
 
-uploadCard.addEventListener('drop', (e) => {
-    e.preventDefault();
-    uploadCard.style.borderColor = 'var(--border)';
-    const file = e.dataTransfer.files[0];
-    if (file && file.name.endsWith('.csv')) {
-        processFile(file);
-    }
-});
+    uploadCard.addEventListener('drop', (e) => {
+        e.preventDefault();
+        uploadCard.style.borderColor = 'var(--border)';
+        const file = e.dataTransfer.files[0];
+        if (file && file.name.endsWith('.csv')) {
+            processFile(file);
+        }
+    });
+}
 
 function handleFileUpload(event) {
     const file = event.target.files[0];
@@ -154,7 +159,9 @@ function calculateStdDev(values) {
 }
 
 function createDispersionChart() {
-    const ctx = document.getElementById('dispersionChart').getContext('2d');
+    const canvas = document.getElementById('dispersionChart');
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
     const carryDistances = golfData.map(s => parseFloat(s['Carry Distance']) || 0);
     const deviations = golfData.map(s => parseFloat(s['Carry Deviation Distance']) || 0);
     
@@ -329,7 +336,9 @@ function createDispersionChart() {
 }
 
 function createDistanceChart() {
-    const ctx = document.getElementById('distanceChart').getContext('2d');
+    const canvas = document.getElementById('distanceChart');
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
     const distances = golfData.map(s => parseFloat(s['Carry Distance']) || 0);
     const avgDistance = distances.reduce((a, b) => a + b, 0) / distances.length;
     
@@ -400,7 +409,9 @@ function createDistanceChart() {
 }
 
 function createSpinChart() {
-    const ctx = document.getElementById('spinChart').getContext('2d');
+    const canvas = document.getElementById('spinChart');
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
     const backspin = golfData.map(s => parseFloat(s['Backspin']) || 0);
     const avgBackspin = backspin.reduce((a, b) => a + b, 0) / backspin.length;
     
@@ -466,7 +477,9 @@ function createSpinChart() {
 }
 
 function createPathChart() {
-    const ctx = document.getElementById('pathChart').getContext('2d');
+    const canvas = document.getElementById('pathChart');
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
     const clubPath = golfData.map(s => parseFloat(s['Club Path']) || 0);
     const faceAngle = golfData.map(s => parseFloat(s['Club Face']) || 0);
     
@@ -592,7 +605,9 @@ function createPathChart() {
 }
 
 function createLaunchChart() {
-    const ctx = document.getElementById('launchChart').getContext('2d');
+    const canvas = document.getElementById('launchChart');
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
     const launchAngles = golfData.map(s => parseFloat(s['Launch Angle']) || 0);
     const avgLaunch = launchAngles.reduce((a, b) => a + b, 0) / launchAngles.length;
     
@@ -1231,7 +1246,9 @@ function toggleDrill(drillId) {
 }
 
 // Generate insights with Gemini (optional)
-document.getElementById('generateInsights').addEventListener('click', async () => {
+const generateInsightsBtn = document.getElementById('generateInsights');
+if (generateInsightsBtn) {
+generateInsightsBtn.addEventListener('click', async () => {
     const apiKey = localStorage.getItem('geminiApiKey');
     if (!apiKey) {
         alert('Gemini API key not configured. Using built-in analysis instead.');
@@ -1303,9 +1320,12 @@ Format as HTML with proper styling.`;
         setTimeout(displayAutomaticInsights, 1000);
     }
 });
+}
 
 function createSmashChart() {
-    const ctx = document.getElementById('smashChart').getContext('2d');
+    const canvas = document.getElementById('smashChart');
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
     const smashFactors = golfData.map(s => parseFloat(s['Smash Factor']) || 0);
     
     if (charts.smash) charts.smash.destroy();
@@ -1358,7 +1378,9 @@ function createSmashChart() {
 }
 
 function createAttackChart() {
-    const ctx = document.getElementById('attackChart').getContext('2d');
+    const canvas = document.getElementById('attackChart');
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
     const attackAngles = golfData.map(s => parseFloat(s['Attack Angle']) || 0);
     const distances = golfData.map(s => parseFloat(s['Carry Distance']) || 0);
     
@@ -1417,7 +1439,9 @@ function createAttackChart() {
 }
 
 function createConsistencyChart(selectedClub = null) {
-    const ctx = document.getElementById('consistencyChart').getContext('2d');
+    const canvas = document.getElementById('consistencyChart');
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
     
     // Group shots by club - try multiple possible column names
     const clubGroups = {};
@@ -1548,7 +1572,9 @@ function createConsistencyChart(selectedClub = null) {
 }
 
 function createBallSpeedChart() {
-    const ctx = document.getElementById('ballSpeedChart').getContext('2d');
+    const canvas = document.getElementById('ballSpeedChart');
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
     const ballSpeeds = golfData.map(s => parseFloat(s['Ball Speed']) || 0).filter(s => s > 0);
     const clubSpeeds = golfData.map(s => parseFloat(s['Club Speed']) || 0).filter(s => s > 0);
     
@@ -1606,7 +1632,9 @@ function createBallSpeedChart() {
 }
 
 function createCarryTotalChart() {
-    const ctx = document.getElementById('carryTotalChart').getContext('2d');
+    const canvas = document.getElementById('carryTotalChart');
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
     const carryDist = golfData.map(s => parseFloat(s['Carry Distance']) || 0);
     const totalDist = golfData.map(s => parseFloat(s['Total Distance']) || parseFloat(s['Carry Distance']) || 0);
     
@@ -1662,7 +1690,9 @@ function createCarryTotalChart() {
 }
 
 function createLoftChart() {
-    const ctx = document.getElementById('loftChart').getContext('2d');
+    const canvas = document.getElementById('loftChart');
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
     const launchAngles = golfData.map(s => parseFloat(s['Launch Angle']) || 0);
     const clubSpeeds = golfData.map(s => parseFloat(s['Club Speed']) || 0);
     
@@ -1723,7 +1753,9 @@ function createLoftChart() {
 }
 
 function createDirectionChart() {
-    const ctx = document.getElementById('directionChart').getContext('2d');
+    const canvas = document.getElementById('directionChart');
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
     const deviations = golfData.map(s => parseFloat(s['Carry Deviation Distance']) || 0);
     const distances = golfData.map(s => parseFloat(s['Carry Distance']) || 0);
     
@@ -1775,7 +1807,9 @@ function createDirectionChart() {
 }
 
 function createApexChart() {
-    const ctx = document.getElementById('apexChart').getContext('2d');
+    const canvas = document.getElementById('apexChart');
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
     const apexHeights = golfData.map(s => parseFloat(s['Apex']) || parseFloat(s['Max Height']) || 0).filter(h => h > 0);
     
     if (charts.apex) charts.apex.destroy();
@@ -1836,7 +1870,9 @@ function createApexChart() {
 }
 
 function createGappingChart() {
-    const ctx = document.getElementById('gappingChart').getContext('2d');
+    const canvas = document.getElementById('gappingChart');
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
     
     if (charts.gapping) charts.gapping.destroy();
     
