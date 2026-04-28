@@ -62,6 +62,40 @@ header h1 {
     letter-spacing: 1px;
 }
 
+/* Navigation */
+nav {
+    display: flex;
+    gap: 8px;
+    justify-content: center;
+    flex-wrap: wrap;
+}
+
+.nav-link {
+    padding: 12px 24px;
+    color: var(--text-secondary);
+    text-decoration: none;
+    border-radius: 8px;
+    font-weight: 500;
+    font-size: 15px;
+    transition: all 0.2s ease;
+    background: transparent;
+}
+
+.nav-link:hover {
+    color: var(--text);
+    background: var(--surface);
+}
+
+.nav-link.active {
+    background: var(--primary);
+    color: white;
+}
+
+.user-bar {
+    display: flex;
+    align-items: center;
+}
+
 .upload-section {
     display: flex;
     flex-direction: column;
