@@ -36,7 +36,7 @@ async function syncUserToSupabase(user) {
     if (!user || !user.email) return;
     
     try {
-        console.log('Syncing user to Supabase:', user.email);
+        console.log('🔄 Syncing user to Supabase:', user.email);
         
         const response = await fetch('/.netlify/functions/sync-user', {
             method: 'POST',
@@ -50,18 +50,21 @@ async function syncUserToSupabase(user) {
         });
         
         if (!response.ok) {
-            throw new Error('Failed to sync user');
+            const errorText = await response.text();
+            console.error('❌ Failed to sync user:', response.status, errorText);
+            throw new Error(`Failed to sync user: ${errorText}`);
         }
         
         const result = await response.json();
-        console.log('User synced successfully:', result);
+        console.log('✅ User synced successfully:', result);
         
         // Store Supabase user ID
         if (result.user_id) {
             localStorage.setItem('supabase_user_id', result.user_id);
+            console.log('💾 Stored Supabase user ID:', result.user_id);
         }
     } catch (error) {
-        console.error('Error syncing user to Supabase:', error);
+        console.error('❌ Error syncing user to Supabase:', error);
         // Don't block login on sync failure
     }
 }
