@@ -87,10 +87,11 @@ async function saveSessions(session) {
         console.log('Attempting to save session to Supabase...');
         const response = await fetch('/.netlify/functions/save-session', {
             method: 'POST',
-            headers: getInviteHeaders({ 'Content-Type': 'application/json' }),
+            headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-                session,
-                userEmail: user.email
+                email: user.email,
+                sessionName: session.name,
+                shots: session.data
             })
         });
         

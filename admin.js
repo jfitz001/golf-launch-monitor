@@ -73,16 +73,16 @@ async function loadAdminData() {
         if (dbStatsResponse.ok) {
             const dbStats = await dbStatsResponse.json();
             
-            if (dbStats.success && dbStats.stats) {
+            if (dbStats.totalUsers !== undefined) {
                 // Update UI with real database stats
-                document.getElementById('total-users').textContent = dbStats.stats.totalUsers;
+                document.getElementById('total-users').textContent = dbStats.totalUsers;
                 
                 // Add database health indicators
                 const statsGrid = document.querySelector('.stats-grid');
                 
                 // Check if we need to add new stat cards
                 let totalSessionsCard = document.getElementById('total-sessions-card');
-                if (!totalSessionsCard) {
+                if (!totalSessionsCard && statsGrid) {
                     totalSessionsCard = document.createElement('div');
                     totalSessionsCard.className = 'stat-card';
                     totalSessionsCard.id = 'total-sessions-card';
@@ -94,23 +94,26 @@ async function loadAdminData() {
                 }
                 
                 let dbSizeCard = document.getElementById('db-size-card');
-                if (!dbSizeCard) {
+                if (!dbSizeCard && statsGrid) {
                     dbSizeCard = document.createElement('div');
                     dbSizeCard.className = 'stat-card';
                     dbSizeCard.id = 'db-size-card';
                     dbSizeCard.innerHTML = `
                         <p>Database Size</p>
-                        <h3 id="db-size">0 MB</h3>
+                        <h3 id="db-size">0 KB</h3>
                     `;
                     statsGrid.appendChild(dbSizeCard);
                 }
                 
-                document.getElementById('total-sessions').textContent = dbStats.stats.totalSessions;
-                document.getElementById('db-size').textContent = `${dbStats.stats.estimatedSizeMB} MB`;
+                const totalSessionsEl = document.getElementById('total-sessions');
+                if (totalSessionsEl) totalSessionsEl.textContent = dbStats.totalSessions || 0;
                 
-                // Use database session counts for API stats
-                document.getElementById('api-calls-today').textContent = dbStats.stats.sessionsToday;
-                document.getElementById('api-calls-month').textContent = dbStats.stats.sessionsMonth;
+                const dbSizeEl = document.getElementById('db-size');
+                if (dbSizeEl) dbSizeEl.textContent = dbStats.estimatedSize || '0 KB';
+                
+                // Set API calls to session count as proxy
+                document.getElementById('api-calls-today').textContent = dbStats.totalSessions || 0;
+                document.getElementById('api-calls-month').textContent = dbStats.totalSessions || 0;
             }
         }
         
