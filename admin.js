@@ -123,7 +123,7 @@ async function loadAdminData() {
             headers: {
                 'Authorization': `Bearer ${token}`,
                 'Content-Type': 'application/json'
-            })
+            }
         });
         
         if (response.ok) {
@@ -213,7 +213,7 @@ async function loadUserList() {
             method: 'GET',
             headers: {
                 'Content-Type': 'application/json'
-            })
+            }
         });
         
         if (!response.ok) {
@@ -301,7 +301,7 @@ async function loadRateLimitConfig() {
         method: 'GET',
         headers: {
             'Content-Type': 'application/json'
-        })
+        }
     });
 
     if (!response.ok) {
@@ -331,7 +331,7 @@ document.getElementById('save-rate-limits').addEventListener('click', async () =
         method: 'POST',
         headers: {
             'Content-Type': 'application/json'
-        }),
+        },
         body: JSON.stringify({
             requesterEmail: currentUser.email,
             ...rateLimits
@@ -365,7 +365,7 @@ async function trackApiCall(endpoint, status, responseTime) {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json'
-            }),
+            },
             body: JSON.stringify(callData)
         });
         
@@ -398,7 +398,7 @@ async function checkRateLimit(endpoint = 'app-action') {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json'
-            }),
+            },
             body: JSON.stringify({ userEmail, endpoint })
         });
         
@@ -461,7 +461,7 @@ async function updateUserAccess(email, updates) {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json'
-        }),
+        },
         body: JSON.stringify({
             requesterEmail: currentUser.email,
             targetEmail: email,
@@ -489,7 +489,7 @@ async function addUserByEmail() {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json'
-        }),
+        },
         body: JSON.stringify({
             requesterEmail: currentUser.email,
             email
@@ -543,7 +543,7 @@ document.getElementById('migrate-data-btn')?.addEventListener('click', async () 
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json'
-            }),
+            },
             body: JSON.stringify({
                 sessions: localSessions,
                 userEmail: user.email
