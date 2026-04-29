@@ -16,6 +16,23 @@ export default async (req, context) => {
 
   const supabaseUrl = `https://${projectKey}.supabase.co`;
 
+  async function getGolfSessionColumns() {
+    const sampleRes = await fetch(
+      `${supabaseUrl}/rest/v1/golf_sessions?select=*&limit=1`,
+      {
+        method: 'GET',
+        headers: {
+          'apikey': serviceKey,
+          'Authorization': `Bearer ${serviceKey}`
+        }
+      }
+    );
+    if (!sampleRes.ok) return new Set();
+    const rows = await sampleRes.json();
+    if (!Array.isArray(rows) || rows.length === 0 || typeof rows[0] !== 'object') return new Set();
+    return new Set(Object.keys(rows[0]));
+  }
+
   try {
     const { email, sessions } = await req.json();
 
@@ -41,6 +58,12 @@ export default async (req, context) => {
 
     let migrated = 0;
     let failed = 0;
+    let availableColumns = new Set();
+    try {
+      availableColumns = await getGolfSessionColumns();
+    } catch (e) {
+      availableColumns = new Set();
+    }
 
     for (const session of sessions) {
       try {
@@ -49,6 +72,19 @@ export default async (req, context) => {
         const avgCarry = shots.reduce((sum, s) => sum + (parseFloat(s['Carry Distance'] || s['Carry Dist.'] || 0)), 0) / shotCount || 0;
         const avgClubSpeed = shots.reduce((sum, s) => sum + (parseFloat(s['Club Speed'] || 0)), 0) / shotCount || 0;
 
+        const payload = {
+          user_id: userId,
+          session_name: session.name || `Session ${new Date(session.date).toLocaleDateString()}`,
+          shot_data: shots,
+          shot_count: shotCount
+        };
+        if (availableColumns.has('avg_carry')) {
+          payload.avg_carry = Math.round(avgCarry * 10) / 10;
+        }
+        if (availableColumns.has('avg_club_speed')) {
+          payload.avg_club_speed = Math.round(avgClubSpeed * 10) / 10;
+        }
+
         await fetch(`${supabaseUrl}/rest/v1/golf_sessions`, {
           method: 'POST',
           headers: {
@@ -56,14 +92,7 @@ export default async (req, context) => {
             'apikey': serviceKey,
             'Authorization': `Bearer ${serviceKey}`
           },
-          body: JSON.stringify({
-            user_id: userId,
-            session_name: session.name || `Session ${new Date(session.date).toLocaleDateString()}`,
-            shot_data: shots,
-            shot_count: shotCount,
-            avg_carry: Math.round(avgCarry * 10) / 10,
-            avg_club_speed: Math.round(avgClubSpeed * 10) / 10
-          })
+          body: JSON.stringify(payload)
         });
         migrated++;
       } catch (e) {
