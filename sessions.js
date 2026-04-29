@@ -96,6 +96,43 @@ function normalizeSessionRecord(session, fallbackIndex = 0) {
     };
 }
 
+function readLocalSessionsNormalized() {
+    try {
+        const raw = JSON.parse(localStorage.getItem('savedSessions') || '[]');
+        return (Array.isArray(raw) ? raw : [])
+            .map((session, index) => normalizeSessionRecord(session, index))
+            .filter(Boolean);
+    } catch (error) {
+        return [];
+    }
+}
+
+function mergeSessions(cloudSessions = [], localSessions = []) {
+    const merged = new Map();
+
+    (Array.isArray(localSessions) ? localSessions : []).forEach((session) => {
+        const normalized = normalizeSessionRecord(session);
+        if (!normalized) return;
+        merged.set(String(normalized.id), normalized);
+    });
+
+    (Array.isArray(cloudSessions) ? cloudSessions : []).forEach((session) => {
+        const normalized = normalizeSessionRecord(session);
+        if (!normalized) return;
+        merged.set(String(normalized.id), normalized);
+    });
+
+    return Array.from(merged.values()).sort((a, b) => new Date(b.date || 0) - new Date(a.date || 0));
+}
+
+function upsertLocalSessionCache(session) {
+    const normalized = normalizeSessionRecord(session);
+    if (!normalized) return;
+    const existing = readLocalSessionsNormalized();
+    const merged = mergeSessions([normalized], existing);
+    localStorage.setItem('savedSessions', JSON.stringify(merged));
+}
+
 // Save sessions to Supabase (with localStorage fallback)
 async function saveSessions(session) {
     const user = netlifyIdentity?.currentUser();
@@ -109,7 +146,6 @@ async function saveSessions(session) {
     }
     
     try {
-        console.log('Attempting to save session to Supabase...');
         const response = await fetch('/.netlify/functions/save-session', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -127,14 +163,12 @@ async function saveSessions(session) {
         }
         
         const result = await response.json();
-        console.log('Session saved to Supabase successfully!');
-        
-        // Also save to localStorage as backup
-        const localSessions = JSON.parse(localStorage.getItem('savedSessions') || '[]');
-        localSessions.push(session);
-        localStorage.setItem('savedSessions', JSON.stringify(localSessions));
-        
-        return { success: true, offline: false, ...result };
+        const canonicalSession = normalizeSessionRecord(result?.session || session);
+        if (canonicalSession) {
+            upsertLocalSessionCache(canonicalSession);
+        }
+
+        return { success: true, offline: false, savedSession: canonicalSession, ...result };
     } catch (error) {
         console.error('Error saving to Supabase, falling back to localStorage:', error);
         
@@ -144,9 +178,7 @@ async function saveSessions(session) {
             console.error('❌ Database tables not set up! Run the Supabase migration first.');
         }
         
-        const localSessions = JSON.parse(localStorage.getItem('savedSessions') || '[]');
-        localSessions.push(session);
-        localStorage.setItem('savedSessions', JSON.stringify(localSessions));
+        upsertLocalSessionCache(session);
         return { success: true, offline: true, error: error.message };
     }
 }
@@ -175,11 +207,13 @@ async function loadSessions() {
         
         const result = await response.json();
         
+        const localSessions = readLocalSessionsNormalized();
         // Support both shapes: [] and { sessions: [] }
         const sessionsRaw = Array.isArray(result) ? result : (result.sessions || []);
-        const sessions = sessionsRaw
+        const cloudSessions = sessionsRaw
             .map((session, index) => normalizeSessionRecord(session, index))
             .filter(Boolean);
+        const sessions = mergeSessions(cloudSessions, localSessions);
         
         // Update localStorage cache
         localStorage.setItem('savedSessions', JSON.stringify(sessions));
@@ -267,7 +301,7 @@ async function saveCurrentSession() {
     btn.disabled = false;
     
     if (result.success) {
-        currentSessionId = session.id;
+        currentSessionId = String(result?.savedSession?.id || session.id);
         await updateSessionsList();
         
         if (result.offline) {

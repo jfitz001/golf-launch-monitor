@@ -16,10 +16,20 @@ export default async (req, context) => {
 
   const supabaseUrl = `https://${projectKey}.supabase.co`;
 
+  function extractRpcUserId(payload) {
+    if (!payload) return null;
+    if (typeof payload === 'string') return payload;
+    if (Array.isArray(payload)) return extractRpcUserId(payload[0]);
+    if (typeof payload === 'object') {
+      return payload.user_id || payload.id || payload.ensure_user_exists || null;
+    }
+    return null;
+  }
+
   try {
     const { email, sessionName, shots } = await req.json();
 
-    if (!email || !shots) {
+    if (!email || !Array.isArray(shots)) {
       return new Response(JSON.stringify({ error: 'Email and shots required' }), {
         status: 400,
         headers: { 'Content-Type': 'application/json' }
@@ -37,7 +47,22 @@ export default async (req, context) => {
       body: JSON.stringify({ user_email: email, netlify_user_id: null })
     });
 
-    const userId = await userRes.json();
+    if (!userRes.ok) {
+      const userErrorText = await userRes.text();
+      return new Response(JSON.stringify({ error: `Failed to ensure user: ${userErrorText}` }), {
+        status: 500,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
+
+    const userPayload = await userRes.json();
+    const userId = extractRpcUserId(userPayload);
+    if (!userId) {
+      return new Response(JSON.stringify({ error: 'Could not resolve user id from ensure_user_exists response' }), {
+        status: 500,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
 
     // Calculate stats
     const shotCount = shots.length;
@@ -63,9 +88,18 @@ export default async (req, context) => {
       })
     });
 
-    const session = await insertRes.json();
+    if (!insertRes.ok) {
+      const insertErrorText = await insertRes.text();
+      return new Response(JSON.stringify({ error: `Failed to save session: ${insertErrorText}` }), {
+        status: 500,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
 
-    return new Response(JSON.stringify({ success: true, session: session[0] }), {
+    const insertPayload = await insertRes.json();
+    const session = Array.isArray(insertPayload) ? insertPayload[0] : insertPayload;
+
+    return new Response(JSON.stringify({ success: true, session }), {
       status: 200,
       headers: { 'Content-Type': 'application/json' }
     });
