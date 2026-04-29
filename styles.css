@@ -1197,6 +1197,58 @@ nav {
     }
 }
 
+/* Mobile nav and filter */
+@media (max-width: 768px) {
+    nav {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+    }
+    
+    .nav-link {
+        padding: 8px 12px;
+        font-size: 12px;
+        margin-right: 0;
+    }
+    
+    .global-filter-bar {
+        padding: 12px;
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 10px;
+    }
+    
+    .club-filter-pills {
+        gap: 6px;
+    }
+    
+    .club-pill {
+        padding: 5px 10px;
+        font-size: 12px;
+    }
+    
+    .swing-score {
+        padding: 20px;
+    }
+    
+    .swing-score-value {
+        font-size: 48px;
+    }
+    
+    .swing-score-delta {
+        padding: 4px 8px;
+        font-size: 12px;
+    }
+    
+    .score-history-section {
+        padding: 16px;
+    }
+    
+    .score-history-chart-container {
+        height: 120px;
+    }
+}
+
 /* Small mobile (iPhone SE, etc) */
 @media (max-width: 375px) {
     body {
@@ -1214,6 +1266,11 @@ nav {
 
     header h1 {
         font-size: 20px;
+    }
+    
+    .nav-link {
+        padding: 6px 10px;
+        font-size: 11px;
     }
 
     .stat-card h3 {
@@ -1239,5 +1296,15 @@ nav {
     .insights-content,
     .drills-content {
         padding: 12px;
+    }
+    
+    .swing-score-value {
+        font-size: 40px;
+    }
+    
+    .swing-score-tooltip {
+        min-width: 200px;
+        padding: 12px;
+        font-size: 12px;
     }
 }

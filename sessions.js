@@ -147,10 +147,13 @@ async function loadSessions() {
         
         const result = await response.json();
         
-        // Update localStorage cache
-        localStorage.setItem('savedSessions', JSON.stringify(result.sessions || []));
+        // Result is array directly from simplified function
+        const sessions = Array.isArray(result) ? result : (result.sessions || []);
         
-        return result.sessions || [];
+        // Update localStorage cache
+        localStorage.setItem('savedSessions', JSON.stringify(sessions));
+        
+        return sessions;
     } catch (error) {
         console.error('Error loading from Supabase, falling back to localStorage:', error);
         const data = localStorage.getItem('savedSessions');

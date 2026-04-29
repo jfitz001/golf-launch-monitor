@@ -58,41 +58,58 @@
 .data-table {
     width: 100%;
     border-collapse: collapse;
-    font-size: 14px;
+    font-size: 13px;
+    font-variant-numeric: tabular-nums;
 }
 
 .data-table thead {
-    background: #e7efe9;
+    background: var(--primary);
     position: sticky;
     top: 0;
     z-index: 10;
 }
 
 .data-table th {
-    padding: 12px;
+    padding: 14px 12px;
     text-align: left;
-    font-weight: 700;
-    color: #11271f;
-    border-bottom: 2px solid var(--border);
+    font-weight: 600;
+    color: white;
+    border-bottom: none;
     white-space: nowrap;
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
 }
 
 .data-table td {
     padding: 12px;
     border-bottom: 1px solid var(--border);
-    color: #28453a;
+    color: var(--text);
+    max-width: 120px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.data-table td.number-cell {
+    font-family: 'SF Mono', 'Monaco', monospace;
+    text-align: right;
 }
 
 .data-table tbody tr {
-    transition: background 0.2s;
+    transition: background 0.15s;
 }
 
-.data-table tbody tr:hover {
+.data-table tbody tr:nth-child(even) {
     background: var(--surface-light);
 }
 
+.data-table tbody tr:hover {
+    background: rgba(22, 101, 52, 0.08);
+}
+
 .data-table tbody tr.selected {
-    background: rgba(16, 185, 129, 0.1);
+    background: rgba(16, 185, 129, 0.15);
 }
 
 .editable-cell {
