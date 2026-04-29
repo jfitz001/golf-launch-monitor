@@ -497,6 +497,15 @@ nav {
     padding: 32px;
     text-align: center;
     margin-bottom: 32px;
+    position: relative;
+    cursor: help;
+}
+
+.swing-score-main {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
 }
 
 .swing-score-value {
@@ -507,11 +516,36 @@ nav {
     margin: 16px 0;
 }
 
+.swing-score-delta {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 6px 12px;
+    border-radius: 20px;
+    font-size: 16px;
+    font-weight: 600;
+}
+
+.swing-score-delta.positive {
+    background: rgba(39, 183, 118, 0.3);
+    color: #a7f3d0;
+}
+
+.swing-score-delta.negative {
+    background: rgba(239, 68, 68, 0.3);
+    color: #fecaca;
+}
+
+.swing-score-delta .delta-arrow {
+    font-size: 18px;
+}
+
 .swing-score-label {
     font-size: 14px;
     color: rgba(255, 255, 255, 0.8);
     text-transform: uppercase;
-    letter-spacing: 1px;
+    letter-spacing: 2px;
+    font-weight: 600;
 }
 
 .swing-score-desc {
@@ -519,6 +553,98 @@ nav {
     color: white;
     font-weight: 500;
     margin-top: 8px;
+}
+
+.swing-score-tooltip {
+    position: absolute;
+    bottom: 100%;
+    left: 50%;
+    transform: translateX(-50%) translateY(10px);
+    background: white;
+    color: var(--text);
+    padding: 16px;
+    border-radius: 12px;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.2);
+    min-width: 240px;
+    opacity: 0;
+    visibility: hidden;
+    transition: all 0.2s ease;
+    z-index: 100;
+    text-align: left;
+    pointer-events: none;
+}
+
+.swing-score:hover .swing-score-tooltip {
+    opacity: 1;
+    visibility: visible;
+    transform: translateX(-50%) translateY(-10px);
+}
+
+.swing-score-tooltip .tooltip-title {
+    font-weight: 700;
+    font-size: 14px;
+    margin-bottom: 12px;
+    color: var(--primary);
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 8px;
+}
+
+.swing-score-tooltip .tooltip-row {
+    display: flex;
+    justify-content: space-between;
+    font-size: 13px;
+    padding: 4px 0;
+}
+
+.swing-score-tooltip .tooltip-row.negative span:last-child {
+    color: var(--danger);
+}
+
+.swing-score-tooltip .tooltip-row.positive span:last-child {
+    color: var(--success);
+}
+
+.swing-score-tooltip .tooltip-row.total {
+    font-weight: 700;
+    font-size: 15px;
+    margin-top: 8px;
+    padding-top: 8px;
+    border-top: 1px solid var(--border);
+}
+
+.swing-score-tooltip .tooltip-divider {
+    height: 1px;
+    background: var(--border);
+    margin: 8px 0;
+}
+
+.swing-score-tooltip .tooltip-footer {
+    font-size: 11px;
+    color: var(--text-secondary);
+    margin-top: 8px;
+    text-align: center;
+}
+
+/* Score History Section */
+.score-history-section {
+    background: var(--surface);
+    border-radius: 12px;
+    padding: 20px;
+    margin-bottom: 24px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+}
+
+.score-history-title {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    margin-bottom: 16px;
+}
+
+.score-history-chart-container {
+    height: 150px;
 }
 
 .session-actions {

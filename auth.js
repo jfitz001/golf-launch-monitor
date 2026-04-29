@@ -94,8 +94,17 @@ if (logoutBtn) {
 
 function showApp(user) {
     console.log('Showing app for:', user.email);
-    if (authSection) authSection.style.display = 'none';
-    if (appSection) appSection.style.display = 'block';
+    if (authSection) {
+        authSection.style.display = 'none';
+        authSection.classList.remove('ready');
+    }
+    if (appSection) {
+        appSection.style.display = 'block';
+        // Slight delay for smooth fade-in
+        requestAnimationFrame(() => {
+            appSection.classList.add('ready');
+        });
+    }
     if (userEmail) userEmail.textContent = user.email;
     
     // Show admin link if admin
@@ -103,12 +112,25 @@ function showApp(user) {
     if (adminLink && user.email === 'jamiefitzgerald001@gmail.com') {
         adminLink.style.display = 'inline-block';
     }
+    
+    // Update swing score after showing app
+    if (typeof updateSwingScore === 'function') {
+        setTimeout(updateSwingScore, 100);
+    }
 }
 
 function showAuth() {
     console.log('Showing auth screen');
-    if (authSection) authSection.style.display = 'flex';
-    if (appSection) appSection.style.display = 'none';
+    if (appSection) {
+        appSection.style.display = 'none';
+        appSection.classList.remove('ready');
+    }
+    if (authSection) {
+        authSection.style.display = 'flex';
+        requestAnimationFrame(() => {
+            authSection.classList.add('ready');
+        });
+    }
 }
 
 window.getCurrentUser = () => netlifyIdentity.currentUser();

@@ -390,121 +390,276 @@ function calculateSessionStats() {
     };
 }
 
-function calculateSwingScore() {
-    // Get data from multiple sources
-    let data = null;
-    if (typeof golfData !== 'undefined' && golfData && golfData.length > 0) {
-        data = golfData;
-    } else if (window.golfData && window.golfData.length > 0) {
-        data = window.golfData;
+// Calculate swing score from ALL session data
+async function calculateSwingScoreFromAllSessions() {
+    let allShots = [];
+    
+    // Get current session data
+    const currentData = window.golfData || [];
+    if (currentData.length > 0) {
+        allShots = [...currentData];
     }
     
-    if (!data || data.length === 0) {
-        return { score: 0, grade: 'N/A', desc: 'No data' };
-    }
-    
-    const insights = analyzeGolfData(data);
-    
-    // Start at 100, deduct for issues
-    let score = 100;
-    
-    // Major issues (-10 each)
-    const majorIssues = insights.warnings.filter(w => w.severity === 'high');
-    score -= majorIssues.length * 10;
-    
-    // Medium issues (-5 each)
-    const mediumIssues = insights.warnings.filter(w => w.severity === 'medium');
-    score -= mediumIssues.length * 5;
-    
-    // Low issues (-2 each)
-    const lowIssues = insights.warnings.filter(w => w.severity === 'low');
-    score -= lowIssues.length * 2;
-    
-    // Bonus for strengths (+3 each, max +15)
-    const strengthBonus = Math.min(insights.strengths.length * 3, 15);
-    score += strengthBonus;
-    
-    // Clamp 0-100
-    score = Math.max(0, Math.min(100, score));
-    
-    // Determine grade
-    let grade, desc;
-    if (score >= 90) {
-        grade = 'A';
-        desc = 'Tour-Level Performance';
-    } else if (score >= 80) {
-        grade = 'B';
-        desc = 'Advanced Player';
-    } else if (score >= 70) {
-        grade = 'C';
-        desc = 'Solid Amateur';
-    } else if (score >= 60) {
-        grade = 'D';
-        desc = 'Developing Player';
-    } else {
-        grade = 'F';
-        desc = 'Needs Improvement';
-    }
-    
-    return { score, grade, desc };
-}
-
-function updateSwingScore() {
-    const scoreEl = document.getElementById('swingScore');
-    const descEl = document.getElementById('swingScoreDesc');
-    
-    if (!scoreEl || !descEl) return;
-    
-    // Get data - check window.golfData first (set by app.js)
-    let data = window.golfData;
-    
-    // Fallback to localStorage
-    if (!data || data.length === 0) {
-        const stored = localStorage.getItem('currentGolfData');
-        if (stored && stored !== '[]') {
-            try { data = JSON.parse(stored); } catch (e) { data = null; }
+    // Get all saved sessions
+    const savedSessions = JSON.parse(localStorage.getItem('savedSessions') || '[]');
+    for (const session of savedSessions) {
+        if (session.data && Array.isArray(session.data)) {
+            allShots = [...allShots, ...session.data];
         }
     }
     
-    if (!data || data.length === 0) {
-        scoreEl.textContent = '--';
-        descEl.textContent = 'Upload data to analyze';
-        return;
+    // Also try to load from Supabase if available
+    try {
+        const user = netlifyIdentity?.currentUser();
+        if (user) {
+            const response = await fetch(`/.netlify/functions/get-sessions?email=${encodeURIComponent(user.email)}`);
+            if (response.ok) {
+                const supabaseSessions = await response.json();
+                for (const session of supabaseSessions) {
+                    if (session.data && Array.isArray(session.data)) {
+                        allShots = [...allShots, ...session.data];
+                    }
+                }
+            }
+        }
+    } catch (e) {
+        console.warn('Could not load Supabase sessions for score:', e);
     }
     
-    // Check analyzeGolfData exists
-    if (typeof analyzeGolfData !== 'function') {
-        scoreEl.textContent = '--';
-        descEl.textContent = 'Analysis loading...';
-        return;
+    return calculateScoreFromShots(allShots);
+}
+
+function calculateScoreFromShots(shots) {
+    if (!shots || shots.length === 0) {
+        return { score: 0, grade: 'N/A', desc: 'No data', breakdown: null };
     }
+    
+    if (typeof analyzeGolfData !== 'function') {
+        return { score: 0, grade: 'N/A', desc: 'Loading...', breakdown: null };
+    }
+    
+    const insights = analyzeGolfData(shots);
+    
+    // Start at 100, deduct for issues
+    let score = 100;
+    const breakdown = {
+        baseScore: 100,
+        highSeverity: 0,
+        mediumSeverity: 0,
+        lowSeverity: 0,
+        strengthBonus: 0,
+        totalShots: shots.length
+    };
+    
+    // Major issues (-10 each)
+    const majorIssues = insights.warnings.filter(w => w.severity === 'high');
+    breakdown.highSeverity = majorIssues.length * 10;
+    score -= breakdown.highSeverity;
+    
+    // Medium issues (-5 each)
+    const mediumIssues = insights.warnings.filter(w => w.severity === 'medium');
+    breakdown.mediumSeverity = mediumIssues.length * 5;
+    score -= breakdown.mediumSeverity;
+    
+    // Low issues (-2 each)
+    const lowIssues = insights.warnings.filter(w => w.severity === 'low');
+    breakdown.lowSeverity = lowIssues.length * 2;
+    score -= breakdown.lowSeverity;
+    
+    // Bonus for strengths (+3 each, max +15)
+    breakdown.strengthBonus = Math.min(insights.strengths.length * 3, 15);
+    score += breakdown.strengthBonus;
+    
+    // Clamp 0-100
+    score = Math.max(0, Math.min(100, Math.round(score)));
+    
+    // Determine grade
+    let grade, desc;
+    if (score >= 90) { grade = 'A'; desc = 'Tour-Level'; }
+    else if (score >= 80) { grade = 'B'; desc = 'Advanced'; }
+    else if (score >= 70) { grade = 'C'; desc = 'Solid Amateur'; }
+    else if (score >= 60) { grade = 'D'; desc = 'Developing'; }
+    else { grade = 'F'; desc = 'Needs Work'; }
+    
+    return { score, grade, desc, breakdown, warnings: insights.warnings, strengths: insights.strengths };
+}
+
+function calculateSwingScore() {
+    // Sync version for compatibility - uses current session only
+    let data = window.golfData || [];
+    if (data.length === 0) {
+        const stored = localStorage.getItem('currentGolfData');
+        if (stored) try { data = JSON.parse(stored); } catch(e) {}
+    }
+    return calculateScoreFromShots(data);
+}
+
+// Score history management
+function getScoreHistory() {
+    return JSON.parse(localStorage.getItem('swingScoreHistory') || '[]');
+}
+
+function saveScoreToHistory(scoreData) {
+    const history = getScoreHistory();
+    const entry = {
+        score: scoreData.score,
+        grade: scoreData.grade,
+        date: new Date().toISOString(),
+        shotCount: scoreData.breakdown?.totalShots || 0
+    };
+    
+    // Avoid duplicate entries within 1 hour
+    const lastEntry = history[history.length - 1];
+    if (lastEntry) {
+        const lastDate = new Date(lastEntry.date);
+        const now = new Date();
+        if ((now - lastDate) < 3600000 && lastEntry.score === entry.score) {
+            return history;
+        }
+    }
+    
+    history.push(entry);
+    // Keep last 50 entries
+    if (history.length > 50) history.shift();
+    localStorage.setItem('swingScoreHistory', JSON.stringify(history));
+    return history;
+}
+
+function getScoreDelta() {
+    const history = getScoreHistory();
+    if (history.length < 2) return null;
+    const current = history[history.length - 1];
+    const previous = history[history.length - 2];
+    return current.score - previous.score;
+}
+
+async function updateSwingScore() {
+    const scoreEl = document.getElementById('swingScore');
+    const descEl = document.getElementById('swingScoreDesc');
+    const deltaEl = document.getElementById('swingScoreDelta');
+    const tooltipEl = document.getElementById('swingScoreTooltip');
+    
+    if (!scoreEl || !descEl) return;
     
     try {
-        const insights = analyzeGolfData(data);
+        // Calculate from ALL sessions
+        const scoreData = await calculateSwingScoreFromAllSessions();
         
-        // Calculate score
-        let score = 100;
-        score -= (insights.warnings.filter(w => w.severity === 'high').length * 10);
-        score -= (insights.warnings.filter(w => w.severity === 'medium').length * 5);
-        score -= (insights.warnings.filter(w => w.severity === 'low').length * 2);
-        score += Math.min(insights.strengths.length * 3, 15);
-        score = Math.max(0, Math.min(100, score));
+        if (scoreData.score === 0 && scoreData.grade === 'N/A') {
+            scoreEl.textContent = '--';
+            descEl.textContent = 'Upload data to analyze';
+            if (deltaEl) deltaEl.style.display = 'none';
+            return;
+        }
         
-        // Grade
-        let grade, desc;
-        if (score >= 90) { grade = 'A'; desc = 'Tour-Level'; }
-        else if (score >= 80) { grade = 'B'; desc = 'Advanced'; }
-        else if (score >= 70) { grade = 'C'; desc = 'Solid Amateur'; }
-        else if (score >= 60) { grade = 'D'; desc = 'Developing'; }
-        else { grade = 'F'; desc = 'Needs Work'; }
+        // Save to history and get delta
+        const history = saveScoreToHistory(scoreData);
+        const delta = getScoreDelta();
         
-        scoreEl.textContent = score;
-        descEl.textContent = `${grade} - ${desc}`;
+        // Update display
+        scoreEl.textContent = scoreData.score;
+        descEl.textContent = `${scoreData.grade} - ${scoreData.desc}`;
+        
+        // Show delta arrow
+        if (deltaEl && delta !== null && delta !== 0) {
+            deltaEl.style.display = 'inline-flex';
+            if (delta > 0) {
+                deltaEl.className = 'swing-score-delta positive';
+                deltaEl.innerHTML = `<span class="delta-arrow">↑</span><span class="delta-value">+${delta}</span>`;
+            } else {
+                deltaEl.className = 'swing-score-delta negative';
+                deltaEl.innerHTML = `<span class="delta-arrow">↓</span><span class="delta-value">${delta}</span>`;
+            }
+        } else if (deltaEl) {
+            deltaEl.style.display = 'none';
+        }
+        
+        // Update tooltip with breakdown
+        if (tooltipEl && scoreData.breakdown) {
+            const b = scoreData.breakdown;
+            tooltipEl.innerHTML = `
+                <div class="tooltip-title">Score Breakdown</div>
+                <div class="tooltip-row"><span>Base Score:</span><span>100</span></div>
+                <div class="tooltip-row negative"><span>High Issues (${b.highSeverity/10}):</span><span>-${b.highSeverity}</span></div>
+                <div class="tooltip-row negative"><span>Medium Issues (${b.mediumSeverity/5}):</span><span>-${b.mediumSeverity}</span></div>
+                <div class="tooltip-row negative"><span>Low Issues (${b.lowSeverity/2}):</span><span>-${b.lowSeverity}</span></div>
+                <div class="tooltip-row positive"><span>Strength Bonus:</span><span>+${b.strengthBonus}</span></div>
+                <div class="tooltip-divider"></div>
+                <div class="tooltip-row total"><span>Final Score:</span><span>${scoreData.score}</span></div>
+                <div class="tooltip-footer">Based on ${b.totalShots} total shots</div>
+            `;
+        }
+        
+        // Update improvement chart if exists
+        if (typeof renderScoreHistoryChart === 'function') {
+            renderScoreHistoryChart(history);
+        }
+        
     } catch (error) {
         console.error('Swing score error:', error);
         scoreEl.textContent = '--';
-        descEl.textContent = 'Error';
+        descEl.textContent = 'Error calculating';
     }
+}
+
+// Render score history chart
+function renderScoreHistoryChart(history) {
+    const canvas = document.getElementById('scoreHistoryChart');
+    if (!canvas || !history || history.length < 2) return;
+    
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+    
+    // Destroy existing chart
+    if (window.scoreHistoryChartInstance) {
+        window.scoreHistoryChartInstance.destroy();
+    }
+    
+    const labels = history.slice(-10).map((h, i) => {
+        const d = new Date(h.date);
+        return `${d.getMonth()+1}/${d.getDate()}`;
+    });
+    
+    const data = history.slice(-10).map(h => h.score);
+    
+    window.scoreHistoryChartInstance = new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels,
+            datasets: [{
+                label: 'Swing Score',
+                data,
+                borderColor: '#166534',
+                backgroundColor: 'rgba(22, 101, 52, 0.1)',
+                fill: true,
+                tension: 0.3,
+                pointRadius: 4,
+                pointBackgroundColor: '#166534'
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: { display: false },
+                tooltip: {
+                    callbacks: {
+                        label: (ctx) => `Score: ${ctx.raw}`
+                    }
+                }
+            },
+            scales: {
+                y: {
+                    min: 0,
+                    max: 100,
+                    grid: { color: 'rgba(0,0,0,0.05)' }
+                },
+                x: {
+                    grid: { display: false }
+                }
+            }
+        }
+    });
 }
 
 // Event listeners

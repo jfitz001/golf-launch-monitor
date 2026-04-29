@@ -84,10 +84,21 @@
         </div>
 
         <div id="dataLoaded" class="hidden">
-            <div class="swing-score">
-                <div class="swing-score-label">AI Swing Score</div>
-                <div class="swing-score-value" id="swingScore">--</div>
+            <div class="swing-score" id="swingScoreContainer">
+                <div class="swing-score-label">AI SWING SCORE</div>
+                <div class="swing-score-main">
+                    <div class="swing-score-value" id="swingScore">--</div>
+                    <div class="swing-score-delta" id="swingScoreDelta" style="display: none;"></div>
+                </div>
                 <div class="swing-score-desc" id="swingScoreDesc">Upload data to analyze</div>
+                <div class="swing-score-tooltip" id="swingScoreTooltip"></div>
+            </div>
+            
+            <div class="score-history-section">
+                <div class="score-history-title">Score Improvement</div>
+                <div class="score-history-chart-container">
+                    <canvas id="scoreHistoryChart"></canvas>
+                </div>
             </div>
 
             <div class="stats-grid">

@@ -1,3 +1,15 @@
+/* Prevent auth flash - hide everything until JS decides what to show */
+#auth-section,
+#app-section {
+    opacity: 0;
+    transition: opacity 0.2s ease;
+}
+
+#auth-section.ready,
+#app-section.ready {
+    opacity: 1;
+}
+
 /* Auth section styles */
 .auth-section {
     min-height: 100vh;
