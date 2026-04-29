@@ -385,61 +385,90 @@ function createDispersionChart() {
     const canvas = document.getElementById('dispersionChart');
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
+    
+    // Club colors
+    const clubColors = {
+        'Driver': '#ef4444',
+        '3 Wood': '#f97316',
+        '5 Wood': '#3b82f6',
+        '4 Hybrid': '#ef4444',
+        '5 Hybrid': '#f97316',
+        '4 Iron': '#8b5cf6',
+        '5 Iron': '#f59e0b',
+        '6 Iron': '#22c55e',
+        '7 Iron': '#06b6d4',
+        '8 Iron': '#10b981',
+        '9 Iron': '#6366f1',
+        'Pitching Wedge': '#ec4899',
+        'Gap Wedge': '#3b82f6',
+        'Sand Wedge': '#a855f7',
+        'Lob Wedge': '#14b8a6'
+    };
+    
+    const getClubName = (shot) => shot['Club Name'] || shot['Club Type'] || shot['Club'] || 'Unknown';
+    
+    // Group shots by club and sort by average distance (longest first)
+    const clubGroups = {};
+    golfData.forEach(shot => {
+        const club = getClubName(shot);
+        if (!clubGroups[club]) clubGroups[club] = [];
+        clubGroups[club].push(shot);
+    });
+    
+    const sortedClubs = Object.entries(clubGroups)
+        .map(([club, shots]) => {
+            const avgDist = shots.reduce((sum, s) => sum + (parseFloat(s['Carry Distance']) || 0), 0) / shots.length;
+            return { club, shots, avgDist };
+        })
+        .sort((a, b) => b.avgDist - a.avgDist);
+    
     const carryDistances = golfData.map(s => parseFloat(s['Carry Distance']) || 0);
     const deviations = golfData.map(s => parseFloat(s['Carry Deviation Distance']) || 0);
     
     const maxDist = Math.max(...carryDistances);
-    const minDist = Math.min(...carryDistances);
     const avgDist = carryDistances.reduce((a, b) => a + b, 0) / carryDistances.length;
     
     if (charts.dispersion) charts.dispersion.destroy();
     
-    // Circular green - typical diameter is 25-30 yards
-    const greenRadius = 15; // 15 yard radius = 30 yard diameter green
-    const greenCenterX = 0; // Centered on target line
-    const greenCenterY = avgDist; // Centered at average distance
+    const greenRadius = 15;
+    const greenCenterX = 0;
+    const greenCenterY = avgDist;
     
-    // Create circle points for the green
     const createCircle = (centerX, centerY, radius, points = 60) => {
         const circle = [];
         for (let i = 0; i <= points; i++) {
             const angle = (i / points) * 2 * Math.PI;
-            circle.push({
-                x: centerX + radius * Math.cos(angle),
-                y: centerY + radius * Math.sin(angle)
-            });
+            circle.push({ x: centerX + radius * Math.cos(angle), y: centerY + radius * Math.sin(angle) });
         }
         return circle;
     };
+    
+    // Create datasets for each club
+    const clubDatasets = sortedClubs.map(({ club, shots }, idx) => {
+        const color = clubColors[club] || `hsl(${(idx * 47) % 360}, 70%, 50%)`;
+        return {
+            label: club,
+            data: shots.map(s => ({
+                x: parseFloat(s['Carry Deviation Distance']) || 0,
+                y: parseFloat(s['Carry Distance']) || 0
+            })),
+            backgroundColor: color,
+            borderColor: color,
+            borderWidth: 2,
+            pointRadius: 6,
+            order: 1
+        };
+    });
     
     charts.dispersion = new Chart(ctx, {
         type: 'scatter',
         data: {
             datasets: [
-                // Background (fairway/rough)
-                {
-                    label: 'Fairway/Rough',
-                    data: [
-                        { x: -30, y: minDist - 20 },
-                        { x: 30, y: minDist - 20 },
-                        { x: 30, y: maxDist + 20 },
-                        { x: -30, y: maxDist + 20 }
-                    ],
-                    borderColor: 'rgba(107, 142, 35, 0.3)',
-                    backgroundColor: 'rgba(107, 142, 35, 0.1)',
-                    borderWidth: 1,
-                    pointRadius: 0,
-                    fill: true,
-                    type: 'line',
-                    showLine: true,
-                    order: 5
-                },
-                // Circular Golf Green
                 {
                     label: 'Green',
                     data: createCircle(greenCenterX, greenCenterY, greenRadius),
                     borderColor: 'rgba(34, 139, 34, 0.8)',
-                    backgroundColor: 'rgba(60, 179, 113, 0.35)', // Medium sea green
+                    backgroundColor: 'rgba(60, 179, 113, 0.35)',
                     borderWidth: 3,
                     pointRadius: 0,
                     fill: true,
@@ -447,43 +476,14 @@ function createDispersionChart() {
                     showLine: true,
                     order: 3
                 },
-                // Hole/Cup
                 {
                     label: 'Hole',
                     data: [{ x: 0, y: avgDist }],
-                    backgroundColor: 'rgba(0, 0, 0, 1)',
-                    borderColor: 'rgba(255, 215, 0, 1)',
+                    backgroundColor: 'black',
+                    borderColor: 'gold',
                     pointRadius: 8,
                     pointStyle: 'triangle',
                     order: 0
-                },
-                // Shots on green
-                {
-                    label: 'On Green',
-                    data: carryDistances.map((dist, i) => {
-                        const dev = deviations[i];
-                        const distFromCenter = Math.sqrt(Math.pow(dev - greenCenterX, 2) + Math.pow(dist - greenCenterY, 2));
-                        return distFromCenter <= greenRadius ? { x: dev, y: dist } : null;
-                    }).filter(d => d !== null),
-                    backgroundColor: 'rgba(16, 185, 129, 0.9)',
-                    borderColor: 'rgba(16, 185, 129, 1)',
-                    borderWidth: 2,
-                    pointRadius: 6,
-                    order: 1
-                },
-                // Shots missed green
-                {
-                    label: 'Missed Green',
-                    data: carryDistances.map((dist, i) => {
-                        const dev = deviations[i];
-                        const distFromCenter = Math.sqrt(Math.pow(dev - greenCenterX, 2) + Math.pow(dist - greenCenterY, 2));
-                        return distFromCenter > greenRadius ? { x: dev, y: dist } : null;
-                    }).filter(d => d !== null),
-                    backgroundColor: 'rgba(239, 68, 68, 0.9)',
-                    borderColor: 'rgba(239, 68, 68, 1)',
-                    borderWidth: 2,
-                    pointRadius: 6,
-                    order: 1
                 },
                 {
                     label: 'Target Line',
@@ -494,64 +494,57 @@ function createDispersionChart() {
                     pointRadius: 0,
                     type: 'line',
                     order: 2
-                }
+                },
+                ...clubDatasets
             ]
         },
         options: {
             responsive: true,
-            maintainAspectRatio: true,
+            maintainAspectRatio: false,
             plugins: {
-                legend: { 
-                    labels: { 
-                        color: '#f1f5f9',
-                        filter: (item) => ['On Green', 'Missed Green'].includes(item.text)
-                    } 
+                legend: {
+                    position: 'top',
+                    labels: {
+                        color: '#374151',
+                        usePointStyle: true,
+                        padding: 15,
+                        filter: (item) => !['Green', 'Hole', 'Target Line'].includes(item.text)
+                    }
                 },
                 title: {
                     display: true,
-                    text: `Green in Regulation: ${Math.round((carryDistances.filter((dist, i) => {
-                        const dev = deviations[i];
-                        // Check if shot is within circular green (distance from center <= radius)
-                        const distFromCenter = Math.sqrt(Math.pow(dev - greenCenterX, 2) + Math.pow(dist - greenCenterY, 2));
-                        return distFromCenter <= greenRadius;
-                    }).length / carryDistances.length) * 100)}%`,
-                    color: '#10b981',
+                    text: `Shot Dispersion by Club (${sortedClubs.length} clubs, ${golfData.length} shots)`,
+                    color: '#166534',
                     font: { size: 14, weight: 'bold' }
                 },
                 tooltip: {
                     callbacks: {
                         label: (ctx) => {
-                            if (['On Green', 'Missed Green'].includes(ctx.dataset.label)) {
-                                const deviation = ctx.parsed.x;
-                                const distance = ctx.parsed.y;
-                                const direction = deviation > 0 ? 'right' : deviation < 0 ? 'left' : 'center';
-                                const distToPin = Math.sqrt(Math.pow(deviation, 2) + Math.pow(distance - avgDist, 2));
-                                return [
-                                    `${ctx.dataset.label}`,
-                                    `Carry: ${distance.toFixed(1)} yds`,
-                                    `${Math.abs(deviation).toFixed(1)} yds ${direction}`,
-                                    `${distToPin.toFixed(1)} yds from hole`
-                                ];
-                            } else if (ctx.dataset.label === 'Hole') {
-                                return 'Target Hole';
-                            }
-                            return '';
+                            if (['Green', 'Hole', 'Target Line'].includes(ctx.dataset.label)) return '';
+                            const deviation = ctx.parsed.x;
+                            const distance = ctx.parsed.y;
+                            const direction = deviation > 0 ? 'right' : deviation < 0 ? 'left' : 'center';
+                            return [
+                                `${ctx.dataset.label}`,
+                                `Carry: ${distance.toFixed(1)} yds`,
+                                `${Math.abs(deviation).toFixed(1)} yds ${direction}`
+                            ];
                         }
                     }
                 }
             },
             scales: {
                 y: {
-                    title: { display: true, text: 'Distance (yards)', color: '#94a3b8' },
-                    grid: { color: 'rgba(71, 85, 105, 0.2)' },
-                    ticks: { color: '#94a3b8' },
+                    title: { display: true, text: 'Carry Distance (yards)', color: '#64748b' },
+                    grid: { color: 'rgba(0, 0, 0, 0.05)' },
+                    ticks: { color: '#64748b' },
                     min: 0,
-                    max: maxDist + 10
+                    max: maxDist + 20
                 },
                 x: {
-                    title: { display: true, text: 'Left (-) / Right (+)  yards', color: '#94a3b8' },
-                    grid: { color: 'rgba(71, 85, 105, 0.2)' },
-                    ticks: { color: '#94a3b8' }
+                    title: { display: true, text: 'Offline (yards) - Left / Right', color: '#64748b' },
+                    grid: { color: 'rgba(0, 0, 0, 0.05)' },
+                    ticks: { color: '#64748b' }
                 }
             }
         }
@@ -2421,12 +2414,20 @@ function createDirectionChart() {
 function createApexChart() {
     const canvas = document.getElementById('apexChart');
     if (!canvas) return;
-    const ctx = canvas.getContext('2d');
+    
     const apexHeights = golfData.map(s => parseFloat(s['Apex']) || parseFloat(s['Max Height']) || 0).filter(h => h > 0);
     
+    // Hide chart card if no apex data
+    const chartCard = canvas.closest('.chart-card');
+    if (apexHeights.length === 0) {
+        if (chartCard) chartCard.style.display = 'none';
+        return;
+    }
+    if (chartCard) chartCard.style.display = '';
+    
+    const ctx = canvas.getContext('2d');
     if (charts.apex) charts.apex.destroy();
     
-    // Create histogram bins
     const bins = [0, 10, 20, 30, 40, 50, 60];
     const counts = new Array(bins.length - 1).fill(0);
     

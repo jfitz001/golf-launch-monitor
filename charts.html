@@ -68,73 +68,74 @@
             </header>
 
             <div id="dataLoaded" class="hidden">
+                <!-- Global Club Filter -->
+                <div class="global-filter-bar">
+                    <div class="filter-label">Filter by Club:</div>
+                    <div class="club-filter-pills" id="globalClubFilter">
+                        <button class="club-pill active" data-club="all">All Clubs</button>
+                    </div>
+                </div>
+
                 <div class="charts-grid">
                     <div class="chart-card">
-                        <h3>All Clubs: Face-to-Path vs Offline</h3>
-                        <p style="margin: -8px 0 12px; font-size: 13px; color: var(--text-secondary);">Color by club. Toggle clubs in legend.</p>
+                        <h3>Face-to-Path vs Offline</h3>
+                        <p class="chart-subtitle">Color by club. Toggle clubs in legend.</p>
                         <div id="allClubsFacePathLegend" class="club-filter-legend"></div>
-                        <div style="height: 360px; margin-top: 10px;">
+                        <div class="chart-container-tall">
                             <canvas id="allClubsFacePathChart"></canvas>
                         </div>
                     </div>
-                    <div class="chart-card dispersion-chart">
-                        <h3>Shot Dispersion (Driving Range View)</h3>
-                        <canvas id="dispersionChart"></canvas>
+                    <div class="chart-card dispersion-chart" id="dispersionCard">
+                        <h3>Shot Dispersion by Club</h3>
+                        <div class="chart-container-tall">
+                            <canvas id="dispersionChart"></canvas>
+                        </div>
                     </div>
-                    <div class="chart-card">
+                    <div class="chart-card" id="distanceCard">
                         <h3>Distance vs Optimal</h3>
                         <canvas id="distanceChart"></canvas>
                     </div>
-                    <div class="chart-card">
+                    <div class="chart-card" id="launchCard">
                         <h3>Launch Conditions vs Tour Pro</h3>
                         <canvas id="launchChart"></canvas>
                     </div>
-                    <div class="chart-card">
+                    <div class="chart-card" id="spinCard">
                         <h3>Spin vs Skill Level</h3>
                         <canvas id="spinChart"></canvas>
                     </div>
-                    <div class="chart-card">
-                        <h3>Club Path Accuracy (Circular Zone)</h3>
+                    <div class="chart-card" id="pathCard">
+                        <h3>Club Path Accuracy</h3>
                         <canvas id="pathChart"></canvas>
                     </div>
-                    <div class="chart-card">
+                    <div class="chart-card" id="smashCard">
                         <h3>Smash Factor Distribution</h3>
                         <canvas id="smashChart"></canvas>
                     </div>
-                    <div class="chart-card">
+                    <div class="chart-card" id="attackCard">
                         <h3>Attack Angle Consistency</h3>
                         <canvas id="attackChart"></canvas>
                     </div>
-                    <div class="chart-card">
-                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
-                            <h3 style="margin: 0;">Shot Consistency Timeline</h3>
-                            <select id="club-filter" style="background: var(--surface-light); color: var(--text); border: 1px solid var(--border); border-radius: 8px; padding: 8px 16px; font-size: 14px; cursor: pointer;">
-                                <option value="">All Clubs</option>
-                            </select>
-                        </div>
+                    <div class="chart-card" id="consistencyCard">
+                        <h3>Shot Consistency Timeline</h3>
                         <canvas id="consistencyChart"></canvas>
                     </div>
-                    <div class="chart-card">
+                    <div class="chart-card" id="ballSpeedCard">
                         <h3>Ball Speed Efficiency</h3>
                         <canvas id="ballSpeedChart"></canvas>
                     </div>
-                    <div class="chart-card">
+                    <div class="chart-card" id="carryTotalCard">
                         <h3>Carry vs Total Distance</h3>
                         <canvas id="carryTotalChart"></canvas>
                     </div>
-                    <div class="chart-card">
+                    <div class="chart-card" id="loftCard">
                         <h3>Dynamic Loft Analysis</h3>
                         <canvas id="loftChart"></canvas>
                     </div>
-                    <div class="chart-card">
+                    <div class="chart-card" id="directionCard">
                         <h3>Launch Direction Pattern</h3>
                         <canvas id="directionChart"></canvas>
                     </div>
-                    <div class="chart-card">
-                        <h3>Apex Height Distribution</h3>
-                        <canvas id="apexChart"></canvas>
-                    </div>
-                    <div class="chart-card">
+                    <div class="chart-card" id="gappingCard">
                         <h3>Distance Gapping by Club</h3>
                         <canvas id="gappingChart"></canvas>
                     </div>
@@ -155,15 +156,60 @@
     <script src="app.js"></script>
     <script src="auth.js"></script>
     <script>
-        // Check if data exists
-        window.addEventListener('load', () => {
-            const savedData = localStorage.getItem('currentGolfData');
-            if (savedData && savedData !== '[]') {
-                golfData = JSON.parse(savedData);
-                document.getElementById('dataLoaded').classList.remove('hidden');
-                document.getElementById('noData').style.display = 'none';
-                
-                // Create all charts
+        let currentClubFilter = 'all';
+        let allGolfData = [];
+        
+        function getClubName(shot) {
+            return shot['Club Name'] || shot['Club Type'] || shot['Club'] || shot['club'] || 'Unknown';
+        }
+        
+        function getFilteredData() {
+            if (currentClubFilter === 'all') return allGolfData;
+            return allGolfData.filter(s => getClubName(s) === currentClubFilter);
+        }
+        
+        function setupGlobalFilter() {
+            const container = document.getElementById('globalClubFilter');
+            if (!container || !allGolfData.length) return;
+            
+            // Get unique clubs sorted by shot count
+            const clubCounts = {};
+            allGolfData.forEach(shot => {
+                const club = getClubName(shot);
+                clubCounts[club] = (clubCounts[club] || 0) + 1;
+            });
+            
+            const sortedClubs = Object.entries(clubCounts)
+                .sort((a, b) => b[1] - a[1])
+                .map(([club, count]) => ({ club, count }));
+            
+            container.innerHTML = `
+                <button class="club-pill active" data-club="all">All Clubs (${allGolfData.length})</button>
+                ${sortedClubs.map(c => `<button class="club-pill" data-club="${c.club}">${c.club} (${c.count})</button>`).join('')}
+            `;
+            
+            container.querySelectorAll('.club-pill').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    container.querySelectorAll('.club-pill').forEach(b => b.classList.remove('active'));
+                    btn.classList.add('active');
+                    currentClubFilter = btn.dataset.club;
+                    window.golfData = getFilteredData();
+                    refreshAllCharts();
+                });
+            });
+        }
+        
+        function refreshAllCharts() {
+            const data = getFilteredData();
+            window.golfData = data;
+            
+            // Destroy existing charts
+            Chart.helpers.each(Chart.instances, (instance) => {
+                instance.destroy();
+            });
+            
+            // Recreate charts with filtered data
+            if (data.length > 0) {
                 createDispersionChart();
                 createDistanceChart();
                 createLaunchChart();
@@ -176,9 +222,36 @@
                 createCarryTotalChart();
                 createLoftChart();
                 createDirectionChart();
-                createApexChart();
                 createGappingChart();
-                renderAllClubsFacePathModule('allClubsFacePathChart', 'allClubsFacePathLegend', golfData);
+                renderAllClubsFacePathModule('allClubsFacePathChart', 'allClubsFacePathLegend', data);
+            }
+        }
+        
+        window.addEventListener('load', () => {
+            const savedData = localStorage.getItem('currentGolfData');
+            if (savedData && savedData !== '[]') {
+                allGolfData = JSON.parse(savedData);
+                window.golfData = allGolfData;
+                document.getElementById('dataLoaded').classList.remove('hidden');
+                document.getElementById('noData').style.display = 'none';
+                
+                setupGlobalFilter();
+                
+                // Create all charts (except apex - removed due to no data)
+                createDispersionChart();
+                createDistanceChart();
+                createLaunchChart();
+                createSpinChart();
+                createPathChart();
+                createSmashChart();
+                createAttackChart();
+                createConsistencyChart();
+                createBallSpeedChart();
+                createCarryTotalChart();
+                createLoftChart();
+                createDirectionChart();
+                createGappingChart();
+                renderAllClubsFacePathModule('allClubsFacePathChart', 'allClubsFacePathLegend', allGolfData);
             } else {
                 document.getElementById('dataLoaded').style.display = 'none';
                 document.getElementById('noData').classList.remove('hidden');
