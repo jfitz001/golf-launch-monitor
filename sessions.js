@@ -343,11 +343,13 @@ async function updateSessionsList() {
             const dateStr = date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
             const timeStr = date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
             
+            const shotCount = session.shotCount || session.data?.length || 0;
+            
             div.innerHTML = `
                 <div class="session-item-name">${session.name}</div>
                 <div class="session-item-meta">
                     <span>${dateStr} at ${timeStr}</span>
-                    <span>${session.data.length} shots</span>
+                    <span>${shotCount} shots</span>
                 </div>
                 <div class="session-item-actions">
                     <button class="session-item-btn load-btn" data-id="${session.id}">Load</button>
