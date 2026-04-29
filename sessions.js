@@ -71,6 +71,31 @@ function loadCurrentShotsFromStorage() {
     }
 }
 
+function normalizeSessionRecord(session, fallbackIndex = 0) {
+    if (!session || typeof session !== 'object') return null;
+
+    const data = Array.isArray(session.data)
+        ? session.data
+        : (Array.isArray(session.session_data) ? session.session_data : (Array.isArray(session.shot_data) ? session.shot_data : []));
+
+    const firstClub = data.length > 0 ? getShotClubName(data[0]) : 'Golf Session';
+    const rawName = session.name || session.sessionName || session.session_name || session.club_type || firstClub;
+    const invalidName = !rawName || ['undefined', 'null', 'nan'].includes(String(rawName).trim().toLowerCase());
+    const name = invalidName ? firstClub : String(rawName).trim();
+    const date = session.date || session.created_at || new Date().toISOString();
+    const id = String(session.id || session.session_id || session.timestamp || `${Date.now()}-${fallbackIndex}`);
+    const shotCount = Number(session.shotCount || session.shot_count || data.length || 0);
+
+    return {
+        ...session,
+        id,
+        name,
+        date,
+        data,
+        shotCount
+    };
+}
+
 // Save sessions to Supabase (with localStorage fallback)
 async function saveSessions(session) {
     const user = netlifyIdentity?.currentUser();
@@ -133,7 +158,10 @@ async function loadSessions() {
     if (!user) {
         // Not logged in, return localStorage only
         const data = localStorage.getItem('savedSessions');
-        return data ? JSON.parse(data) : [];
+        const parsed = data ? JSON.parse(data) : [];
+        return (Array.isArray(parsed) ? parsed : [])
+            .map((session, index) => normalizeSessionRecord(session, index))
+            .filter(Boolean);
     }
     
     try {
@@ -147,8 +175,11 @@ async function loadSessions() {
         
         const result = await response.json();
         
-        // Result is array directly from simplified function
-        const sessions = Array.isArray(result) ? result : (result.sessions || []);
+        // Support both shapes: [] and { sessions: [] }
+        const sessionsRaw = Array.isArray(result) ? result : (result.sessions || []);
+        const sessions = sessionsRaw
+            .map((session, index) => normalizeSessionRecord(session, index))
+            .filter(Boolean);
         
         // Update localStorage cache
         localStorage.setItem('savedSessions', JSON.stringify(sessions));
@@ -157,7 +188,10 @@ async function loadSessions() {
     } catch (error) {
         console.error('Error loading from Supabase, falling back to localStorage:', error);
         const data = localStorage.getItem('savedSessions');
-        return data ? JSON.parse(data) : [];
+        const parsed = data ? JSON.parse(data) : [];
+        return (Array.isArray(parsed) ? parsed : [])
+            .map((session, index) => normalizeSessionRecord(session, index))
+            .filter(Boolean);
     }
 }
 
@@ -278,10 +312,11 @@ async function deleteSessionById(sessionId) {
     
     // Also delete from localStorage
     const sessions = JSON.parse(localStorage.getItem('savedSessions') || '[]');
-    const filtered = sessions.filter(s => s.id !== sessionId);
+    const targetId = String(sessionId);
+    const filtered = sessions.filter(s => String(s?.id) !== targetId);
     localStorage.setItem('savedSessions', JSON.stringify(filtered));
     
-    if (currentSessionId === sessionId) {
+    if (String(currentSessionId) === targetId) {
         currentSessionId = null;
     }
     
@@ -290,7 +325,8 @@ async function deleteSessionById(sessionId) {
 
 async function loadSession(sessionId) {
     const sessions = await loadSessions();
-    const session = sessions.find(s => s.id === sessionId);
+    const targetId = String(sessionId);
+    const session = sessions.find(s => String(s.id) === targetId);
     
     if (!session) {
         alert('Session not found');
@@ -323,7 +359,7 @@ async function updateSessionsList() {
     listDiv.innerHTML = '<div style="text-align: center; color: var(--text-secondary); padding: 40px 20px;">Loading sessions...</div>';
     
     try {
-        const sessions = await loadSessions();
+        const sessions = (await loadSessions()).filter(Boolean);
         
         if (sessions.length === 0) {
             listDiv.innerHTML = '<div style="text-align: center; color: var(--text-secondary); padding: 40px 20px;">No sessions saved yet</div>';
@@ -332,7 +368,7 @@ async function updateSessionsList() {
         
         listDiv.innerHTML = '';
         
-        sessions.sort((a, b) => new Date(b.date) - new Date(a.date)).forEach(session => {
+        sessions.sort((a, b) => new Date(b.date || 0) - new Date(a.date || 0)).forEach(session => {
             const div = document.createElement('div');
             div.className = 'session-item';
             if (session.id === currentSessionId) {
@@ -343,10 +379,11 @@ async function updateSessionsList() {
             const dateStr = date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
             const timeStr = date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
             
-            const shotCount = session.shotCount || session.data?.length || 0;
+            const shotCount = Number(session.shotCount || session?.data?.length || 0);
+            const displayName = session.name || 'Golf Session';
             
             div.innerHTML = `
-                <div class="session-item-name">${session.name}</div>
+                <div class="session-item-name">${displayName}</div>
                 <div class="session-item-meta">
                     <span>${dateStr} at ${timeStr}</span>
                     <span>${shotCount} shots</span>
@@ -364,7 +401,7 @@ async function updateSessionsList() {
         document.querySelectorAll('.load-btn').forEach(btn => {
             btn.addEventListener('click', async (e) => {
                 e.stopPropagation();
-                const sessionId = parseInt(btn.dataset.id);
+                const sessionId = String(btn.dataset.id || '');
                 await loadSession(sessionId);
                 currentSessionId = sessionId;
                 await updateSessionsList();
@@ -375,7 +412,7 @@ async function updateSessionsList() {
         document.querySelectorAll('.delete-btn').forEach(btn => {
             btn.addEventListener('click', async (e) => {
                 e.stopPropagation();
-                const sessionId = parseInt(btn.dataset.id);
+                const sessionId = String(btn.dataset.id || '');
                 await deleteSessionById(sessionId);
             });
         });

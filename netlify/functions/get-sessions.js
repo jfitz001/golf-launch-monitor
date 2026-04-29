@@ -57,16 +57,28 @@ export default async (req, context) => {
 
     const sessions = await sessionsRes.json();
 
-    // Transform for frontend
-    const transformed = sessions.map(s => ({
-      id: s.id,
-      name: s.session_name,
-      date: s.created_at,
-      shotCount: s.shot_count,
-      avgCarry: s.avg_carry,
-      avgClubSpeed: s.avg_club_speed,
-      data: s.shot_data
-    }));
+    // Transform for frontend (supports mixed legacy/new schemas)
+    const transformed = (Array.isArray(sessions) ? sessions : []).map((s, index) => {
+      const data = Array.isArray(s.shot_data)
+        ? s.shot_data
+        : (Array.isArray(s.session_data) ? s.session_data : []);
+
+      const firstShot = data[0] || {};
+      const inferredClub = firstShot['Club Name'] || firstShot['Club Type'] || firstShot['Club'] || 'Golf Session';
+      const rawName = s.session_name || s.name || s.club_type || inferredClub;
+      const invalidName = !rawName || ['undefined', 'null', 'nan'].includes(String(rawName).trim().toLowerCase());
+      const safeName = invalidName ? inferredClub : String(rawName).trim();
+
+      return {
+        id: String(s.id || s.session_id || `${Date.now()}-${index}`),
+        name: safeName,
+        date: s.created_at || s.date || new Date().toISOString(),
+        shotCount: Number(s.shot_count || data.length || 0),
+        avgCarry: s.avg_carry,
+        avgClubSpeed: s.avg_club_speed,
+        data
+      };
+    });
 
     return new Response(JSON.stringify(transformed), {
       status: 200,
