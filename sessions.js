@@ -676,10 +676,10 @@ function calculateScoreFromShots(shots) {
     
     const insights = analyzeGolfData(shots);
     
-    // Start at 100, deduct for issues
-    let score = 100;
+    // Amateur-calibrated score: start below perfect and make "100" rare.
+    let score = 92;
     const breakdown = {
-        baseScore: 100,
+        baseScore: 92,
         highSeverity: 0,
         mediumSeverity: 0,
         lowSeverity: 0,
@@ -687,34 +687,40 @@ function calculateScoreFromShots(shots) {
         totalShots: shots.length
     };
     
-    // Major issues (-10 each)
+    // Major issues (-12 each)
     const majorIssues = insights.warnings.filter(w => w.severity === 'high');
-    breakdown.highSeverity = majorIssues.length * 10;
+    breakdown.highSeverity = majorIssues.length * 12;
     score -= breakdown.highSeverity;
     
-    // Medium issues (-5 each)
+    // Medium issues (-6 each)
     const mediumIssues = insights.warnings.filter(w => w.severity === 'medium');
-    breakdown.mediumSeverity = mediumIssues.length * 5;
+    breakdown.mediumSeverity = mediumIssues.length * 6;
     score -= breakdown.mediumSeverity;
     
-    // Low issues (-2 each)
+    // Low issues (-3 each)
     const lowIssues = insights.warnings.filter(w => w.severity === 'low');
-    breakdown.lowSeverity = lowIssues.length * 2;
+    breakdown.lowSeverity = lowIssues.length * 3;
     score -= breakdown.lowSeverity;
     
-    // Bonus for strengths (+3 each, max +15)
-    breakdown.strengthBonus = Math.min(insights.strengths.length * 3, 15);
+    // Small bonus for strengths (+1 each, max +6). Avoid masking real issues.
+    breakdown.strengthBonus = Math.min(insights.strengths.length, 6);
     score += breakdown.strengthBonus;
     
+    // Imperfect sessions cannot score "tour-perfect" from strengths alone.
+    if (insights.warnings.length > 0) {
+        score = Math.min(score, 94);
+    }
+
     // Clamp 0-100
     score = Math.max(0, Math.min(100, Math.round(score)));
     
     // Determine grade
     let grade, desc;
-    if (score >= 90) { grade = 'A'; desc = 'Tour-Level'; }
-    else if (score >= 80) { grade = 'B'; desc = 'Advanced'; }
-    else if (score >= 70) { grade = 'C'; desc = 'Solid Amateur'; }
-    else if (score >= 60) { grade = 'D'; desc = 'Developing'; }
+    if (score >= 96) { grade = 'A+'; desc = 'Tour-Level'; }
+    else if (score >= 88) { grade = 'A'; desc = 'Advanced Amateur'; }
+    else if (score >= 78) { grade = 'B'; desc = 'Skilled Amateur'; }
+    else if (score >= 68) { grade = 'C'; desc = 'Solid Amateur'; }
+    else if (score >= 58) { grade = 'D'; desc = 'Developing'; }
     else { grade = 'F'; desc = 'Needs Work'; }
     
     return { score, grade, desc, breakdown, warnings: insights.warnings, strengths: insights.strengths };
@@ -815,10 +821,10 @@ async function updateSwingScore() {
             const b = scoreData.breakdown;
             tooltipEl.innerHTML = `
                 <div class="tooltip-title">Score Breakdown</div>
-                <div class="tooltip-row"><span>Base Score:</span><span>100</span></div>
-                <div class="tooltip-row negative"><span>High Issues (${b.highSeverity/10}):</span><span>-${b.highSeverity}</span></div>
-                <div class="tooltip-row negative"><span>Medium Issues (${b.mediumSeverity/5}):</span><span>-${b.mediumSeverity}</span></div>
-                <div class="tooltip-row negative"><span>Low Issues (${b.lowSeverity/2}):</span><span>-${b.lowSeverity}</span></div>
+                <div class="tooltip-row"><span>Base Score:</span><span>${b.baseScore}</span></div>
+                <div class="tooltip-row negative"><span>High Issues (${b.highSeverity/12}):</span><span>-${b.highSeverity}</span></div>
+                <div class="tooltip-row negative"><span>Medium Issues (${b.mediumSeverity/6}):</span><span>-${b.mediumSeverity}</span></div>
+                <div class="tooltip-row negative"><span>Low Issues (${b.lowSeverity/3}):</span><span>-${b.lowSeverity}</span></div>
                 <div class="tooltip-row positive"><span>Strength Bonus:</span><span>+${b.strengthBonus}</span></div>
                 <div class="tooltip-divider"></div>
                 <div class="tooltip-row total"><span>Final Score:</span><span>${scoreData.score}</span></div>
