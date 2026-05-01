@@ -23,7 +23,7 @@
     <!-- App Section -->
     <div id="app-section">
         <header>
-            <div style="display: flex; justify-content: space-between; align-items: center;">
+            <div class="header-top-row">
                 <div>
                     <h1>Shot Data Table</h1>
                     <p>View, edit, and manage your shot data</p>
@@ -33,7 +33,7 @@
                     <button id="logout-btn" class="secondary-button">Logout</button>
                 </div>
             </div>
-            <nav style="margin-top: 20px;">
+            <nav class="main-nav">
                 <a href="/upload" class="nav-link">Upload</a>
                 <a href="/progress" class="nav-link">Progress</a>
                 <a href="/charts" class="nav-link">Charts</a>
@@ -68,5 +68,6 @@
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="supabase-client.js"></script>
     <script src="sync-service.js"></script>
+    <script src="animations.js"></script>
 </body>
 </html>

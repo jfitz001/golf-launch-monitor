@@ -30,6 +30,7 @@
             Sessions
         </button>
 
+        <div class="sessions-overlay" id="sessionsOverlay"></div>
         <div class="sessions-panel" id="sessionsPanel">
             <div class="sessions-panel-header">
                 <div class="sessions-panel-title">Session History</div>
@@ -45,17 +46,17 @@
 
         <div class="container">
             <header>
-                <div style="display: flex; justify-content: space-between; align-items: center;">
+                <div class="header-top-row">
                     <div>
                         <h1>Performance Charts</h1>
                         <p class="subtitle">Visual Analytics & Trends</p>
                     </div>
                     <div class="user-bar">
-                        <span id="user-email" style="margin-right: 16px; color: var(--text-secondary);"></span>
+                        <span id="user-email"></span>
                         <button id="logout-btn" class="secondary-button">Logout</button>
                     </div>
                 </div>
-                <nav style="margin-top: 20px;">
+                <nav class="main-nav">
                     <a href="/upload" class="nav-link">Upload</a>
                     <a href="/progress" class="nav-link">Progress</a>
                     <a href="/charts" class="nav-link active">Charts</a>
@@ -68,11 +69,19 @@
             </header>
 
             <div id="dataLoaded" class="hidden">
-                <!-- Global Club Filter -->
-                <div class="global-filter-bar">
-                    <div class="filter-label">Filter by Club:</div>
-                    <div class="club-filter-pills" id="globalClubFilter">
-                        <button class="club-pill active" data-club="all">All Clubs</button>
+                <!-- Global Session + Club Filters -->
+                <div class="global-filter-bar chart-filter-bar">
+                    <div class="chart-filter-group">
+                        <label class="filter-label" for="sessionFilter">Filter by Session:</label>
+                        <select id="sessionFilter" class="session-filter-select">
+                            <option value="all">All Sessions</option>
+                        </select>
+                    </div>
+                    <div class="chart-filter-group chart-filter-group-wide">
+                        <div class="filter-label">Filter by Club:</div>
+                        <div class="club-filter-pills" id="globalClubFilter">
+                            <button class="club-pill active" data-club="all">All Clubs</button>
+                        </div>
                     </div>
                 </div>
 
@@ -84,6 +93,16 @@
                         <div class="chart-container-tall">
                             <canvas id="allClubsFacePathChart"></canvas>
                         </div>
+                    </div>
+                    <div class="chart-card facepath-insights-card" id="facePathInsightsCard">
+                        <h3>Face-to-Path Insights</h3>
+                        <p class="chart-subtitle">Live summary from current filter selection.</p>
+                        <div id="facePathInsights" class="facepath-insights-content"></div>
+                    </div>
+                    <div class="chart-card facepath-actions-card" id="facePathActionCard">
+                        <h3>Practice Focus</h3>
+                        <p class="chart-subtitle">Specific next reps from current filter selection.</p>
+                        <div id="facePathActions" class="facepath-actions-content"></div>
                     </div>
                     <div class="chart-card dispersion-chart" id="dispersionCard">
                         <h3>Shot Dispersion by Club</h3>
@@ -157,7 +176,9 @@
     <script src="auth.js"></script>
     <script>
         let currentClubFilter = 'all';
+        let currentSessionFilter = 'all';
         let allGolfData = [];
+        let allChartSessions = [];
         
         function getClubName(shot) {
             return shot['Club Name'] || shot['Club Type'] || shot['Club'] || shot['club'] || 'Unknown';
@@ -167,10 +188,293 @@
             if (currentClubFilter === 'all') return allGolfData;
             return allGolfData.filter(s => getClubName(s) === currentClubFilter);
         }
+
+        function escapeHtml(value) {
+            return String(value ?? '')
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#039;');
+        }
+
+        function getSessionShots(session) {
+            if (!session || typeof session !== 'object') return [];
+            if (Array.isArray(session.data)) return session.data;
+            if (Array.isArray(session.session_data)) return session.session_data;
+            if (Array.isArray(session.shot_data)) return session.shot_data;
+            return [];
+        }
+
+        function normalizeChartSession(session, index = 0) {
+            const data = getSessionShots(session);
+            if (!data.length) return null;
+            const fallbackName = data[0] ? getClubName(data[0]) : 'Golf Session';
+            const rawName = session?.name || session?.sessionName || session?.session_name || fallbackName;
+            const invalidName = !rawName || ['undefined', 'null', 'nan'].includes(String(rawName).trim().toLowerCase());
+            return {
+                id: String(session?.id || session?.session_id || session?.timestamp || `session-${index}`),
+                name: invalidName ? fallbackName : String(rawName).trim(),
+                date: session?.date || session?.created_at || null,
+                data
+            };
+        }
+
+        function getAllSessionShots() {
+            return allChartSessions.flatMap((session) => session.data || []);
+        }
+
+        function getSelectedSessionShots() {
+            if (currentSessionFilter === 'all') return getAllSessionShots();
+            const selected = allChartSessions.find((session) => String(session.id) === String(currentSessionFilter));
+            return selected ? selected.data : getAllSessionShots();
+        }
+
+        function formatSessionOption(session) {
+            const date = session.date ? new Date(session.date) : null;
+            const dateLabel = date && !Number.isNaN(date.getTime())
+                ? date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+                : 'No date';
+            return `${session.name} - ${dateLabel} (${session.data.length} shots)`;
+        }
+
+        function setupSessionFilter() {
+            const select = document.getElementById('sessionFilter');
+            if (!select) return;
+
+            const allShots = getAllSessionShots().length;
+            select.innerHTML = `
+                <option value="all">All Sessions (${allChartSessions.length} sessions, ${allShots} shots)</option>
+                ${allChartSessions.map((session) => (
+                    `<option value="${escapeHtml(session.id)}">${escapeHtml(formatSessionOption(session))}</option>`
+                )).join('')}
+            `;
+            select.value = currentSessionFilter;
+
+            select.onchange = () => {
+                currentSessionFilter = select.value || 'all';
+                currentClubFilter = 'all';
+                allGolfData = getSelectedSessionShots();
+                setupGlobalFilter();
+                syncChartData(getFilteredData());
+                refreshAllCharts();
+            };
+        }
+
+        async function reloadChartSessions() {
+            let sessions = [];
+            try {
+                sessions = typeof loadSessions === 'function' ? await loadSessions() : [];
+            } catch (error) {
+                console.error('Unable to load saved sessions for chart filters:', error);
+                sessions = [];
+            }
+
+            allChartSessions = (Array.isArray(sessions) ? sessions : [])
+                .map((session, index) => normalizeChartSession(session, index))
+                .filter(Boolean);
+        }
+
+        function applyCurrentFilters() {
+            if (currentSessionFilter !== 'all' && !allChartSessions.some((session) => String(session.id) === String(currentSessionFilter))) {
+                currentSessionFilter = 'all';
+                currentClubFilter = 'all';
+            }
+            allGolfData = getSelectedSessionShots();
+            setupSessionFilter();
+            setupGlobalFilter();
+            syncChartData(getFilteredData());
+            refreshAllCharts();
+        }
+
+        function syncChartData(data) {
+            if (typeof window.setGolfData === 'function') {
+                window.setGolfData(data);
+                return;
+            }
+            window.golfData = Array.isArray(data) ? data : [];
+            try {
+                golfData = window.golfData;
+            } catch (error) {
+                // no-op if lexical binding unavailable
+            }
+        }
+
+        function renderFacePathInsights(shots) {
+            const container = document.getElementById('facePathInsights');
+            if (!container) return;
+            if (!Array.isArray(shots) || shots.length === 0) {
+                container.innerHTML = '<div class="facepath-empty">No shots in current filter.</div>';
+                return;
+            }
+
+            const valid = shots
+                .map((shot) => {
+                    const face = parseFloat(shot['Club Face']);
+                    const path = parseFloat(shot['Club Path']);
+                    const offline = parseFloat(shot['Carry Deviation Distance']);
+                    if (!Number.isFinite(face) || !Number.isFinite(path) || !Number.isFinite(offline)) return null;
+                    const f2p = face - path;
+                    return { f2p, offline, absOffline: Math.abs(offline), club: getClubName(shot) };
+                })
+                .filter(Boolean);
+
+            if (!valid.length) {
+                container.innerHTML = '<div class="facepath-empty">Need Club Face, Club Path, and Carry Deviation Distance columns.</div>';
+                return;
+            }
+
+            const avg = (values) => values.reduce((sum, v) => sum + v, 0) / Math.max(values.length, 1);
+            const f2pValues = valid.map((r) => r.f2p);
+            const offlineValues = valid.map((r) => r.offline);
+            const absOfflineValues = valid.map((r) => r.absOffline);
+            const meanF2P = avg(f2pValues);
+            const meanOffline = avg(offlineValues);
+            const meanAbsOffline = avg(absOfflineValues);
+            const rightMissPct = (valid.filter((r) => r.offline > 0).length / valid.length) * 100;
+
+            const covariance = avg(valid.map((r) => (r.f2p - meanF2P) * (r.offline - meanOffline)));
+            const stdF2P = Math.sqrt(avg(f2pValues.map((v) => (v - meanF2P) ** 2)));
+            const stdOffline = Math.sqrt(avg(offlineValues.map((v) => (v - meanOffline) ** 2)));
+            const corr = (stdF2P > 0 && stdOffline > 0) ? covariance / (stdF2P * stdOffline) : 0;
+
+            const byClub = {};
+            valid.forEach((row) => {
+                if (!byClub[row.club]) byClub[row.club] = [];
+                byClub[row.club].push(row);
+            });
+
+            const clubRows = Object.entries(byClub)
+                .map(([club, rows]) => ({
+                    club,
+                    shots: rows.length,
+                    avgF2P: avg(rows.map((r) => r.f2p)),
+                    avgAbsOffline: avg(rows.map((r) => r.absOffline))
+                }))
+                .sort((a, b) => a.avgAbsOffline - b.avgAbsOffline)
+                .slice(0, 5);
+
+            const signed = (value) => `${value > 0 ? '+' : ''}${value.toFixed(1)}`;
+            const corrLabel = corr > 0.55 ? 'Strong positive' : corr < -0.55 ? 'Strong negative' : 'Weak / mixed';
+
+            container.innerHTML = `
+                <div class="facepath-kpi-grid">
+                    <div class="facepath-kpi"><span>Shots</span><strong>${valid.length}</strong></div>
+                    <div class="facepath-kpi"><span>Avg F2P</span><strong>${signed(meanF2P)}°</strong></div>
+                    <div class="facepath-kpi"><span>Avg Offline</span><strong>${signed(meanOffline)} yd</strong></div>
+                    <div class="facepath-kpi"><span>Abs Offline</span><strong>${meanAbsOffline.toFixed(1)} yd</strong></div>
+                    <div class="facepath-kpi"><span>Right Miss</span><strong>${rightMissPct.toFixed(0)}%</strong></div>
+                    <div class="facepath-kpi"><span>F2P→Offline</span><strong>${corr.toFixed(2)}</strong></div>
+                </div>
+                <div class="facepath-callout">${corrLabel} relationship. Higher F2P tends to move offline ${corr >= 0 ? 'right' : 'left'}.</div>
+                <div class="facepath-mini-title">Most Accurate Clubs (lowest avg |offline|)</div>
+                <div class="facepath-mini-table">
+                    ${clubRows.map((row) => `
+                        <div class="facepath-mini-row">
+                            <span>${row.club} <em>${row.shots}</em></span>
+                            <span>${row.avgAbsOffline.toFixed(1)} yd</span>
+                            <span>${signed(row.avgF2P)}°</span>
+                        </div>
+                    `).join('')}
+                </div>
+            `;
+        }
+
+        function renderFacePathActions(shots) {
+            const container = document.getElementById('facePathActions');
+            if (!container) return;
+            if (!Array.isArray(shots) || shots.length === 0) {
+                container.innerHTML = '<div class="facepath-empty">No shots in current filter.</div>';
+                return;
+            }
+
+            const valid = shots
+                .map((shot) => {
+                    const face = parseFloat(shot['Club Face']);
+                    const path = parseFloat(shot['Club Path']);
+                    const offline = parseFloat(shot['Carry Deviation Distance']);
+                    if (!Number.isFinite(face) || !Number.isFinite(path) || !Number.isFinite(offline)) return null;
+                    return { f2p: face - path, offline, absOffline: Math.abs(offline), club: getClubName(shot) };
+                })
+                .filter(Boolean);
+
+            if (!valid.length) {
+                container.innerHTML = '<div class="facepath-empty">Need Club Face, Club Path, and Carry Deviation Distance columns.</div>';
+                return;
+            }
+
+            const avg = (values) => values.reduce((sum, v) => sum + v, 0) / Math.max(values.length, 1);
+            const signed = (value) => `${value > 0 ? '+' : ''}${value.toFixed(1)}`;
+
+            const avgF2P = avg(valid.map((r) => r.f2p));
+            const avgOffline = avg(valid.map((r) => r.offline));
+            const avgAbsOffline = avg(valid.map((r) => r.absOffline));
+            const targetF2P = 1.0;
+            const targetAbsOffline = 5.0;
+            const f2pDelta = avgF2P - targetF2P;
+            const offDelta = avgAbsOffline - targetAbsOffline;
+
+            const clubStats = {};
+            valid.forEach((row) => {
+                if (!clubStats[row.club]) clubStats[row.club] = [];
+                clubStats[row.club].push(row.absOffline);
+            });
+            const ranked = Object.entries(clubStats).map(([club, offs]) => ({
+                club,
+                avgAbs: avg(offs),
+                shots: offs.length
+            })).sort((a, b) => b.avgAbs - a.avgAbs);
+
+            const needsWork = ranked[0];
+            const bestClub = ranked[ranked.length - 1];
+
+            const pathBiasText = avgF2P > 2.5
+                ? 'Face too open vs path. Work neutral face.'
+                : avgF2P < -1.5
+                    ? 'Face too closed vs path. Reduce closure rate.'
+                    : 'Face-to-path near neutral. Keep pattern.';
+            const missBiasText = avgOffline > 2
+                ? 'Right bias present. Start line control priority.'
+                : avgOffline < -2
+                    ? 'Left bias present. Start line control priority.'
+                    : 'Start line fairly centered.';
+
+            const todayRepA = Math.max(12, Math.min(30, Math.round(avgAbsOffline * 2)));
+            const todayRepB = Math.max(10, Math.min(24, Math.round(Math.abs(f2pDelta) * 5)));
+
+            container.innerHTML = `
+                <div class="facepath-action-alert">
+                    <strong>Current gap:</strong> F2P ${signed(avgF2P)}° (${signed(f2pDelta)}° vs target), Abs Offline ${avgAbsOffline.toFixed(1)} yd (${offDelta > 0 ? '+' : ''}${offDelta.toFixed(1)} yd vs target).
+                </div>
+                <div class="facepath-action-list">
+                    <div class="facepath-action-item"><strong>1.</strong> ${pathBiasText}</div>
+                    <div class="facepath-action-item"><strong>2.</strong> ${missBiasText}</div>
+                    <div class="facepath-action-item"><strong>3.</strong> Do ${todayRepA} balls gate-start drill, then ${todayRepB} balls face-control ladder.</div>
+                    <div class="facepath-action-item"><strong>4.</strong> Retest: aim Avg F2P between 0° and +2°, Abs Offline under ${targetAbsOffline.toFixed(0)} yd.</div>
+                </div>
+                <div class="facepath-mini-title">Club Priority</div>
+                <div class="facepath-priority-grid">
+                    <div class="facepath-priority-card">
+                        <span>Needs Work</span>
+                        <strong>${needsWork ? needsWork.club : '—'}</strong>
+                        <small>${needsWork ? `${needsWork.avgAbs.toFixed(1)} yd | ${needsWork.shots} shots` : '—'}</small>
+                    </div>
+                    <div class="facepath-priority-card">
+                        <span>Most Stable</span>
+                        <strong>${bestClub ? bestClub.club : '—'}</strong>
+                        <small>${bestClub ? `${bestClub.avgAbs.toFixed(1)} yd | ${bestClub.shots} shots` : '—'}</small>
+                    </div>
+                </div>
+            `;
+        }
         
         function setupGlobalFilter() {
             const container = document.getElementById('globalClubFilter');
-            if (!container || !allGolfData.length) return;
+            if (!container) return;
+            if (!allGolfData.length) {
+                container.innerHTML = '<span class="club-filter-empty">No clubs in this session filter.</span>';
+                return;
+            }
             
             // Get unique clubs sorted by shot count
             const clubCounts = {};
@@ -185,7 +489,7 @@
             
             container.innerHTML = `
                 <button class="club-pill active" data-club="all">All Clubs (${allGolfData.length})</button>
-                ${sortedClubs.map(c => `<button class="club-pill" data-club="${c.club}">${c.club} (${c.count})</button>`).join('')}
+                ${sortedClubs.map(c => `<button class="club-pill" data-club="${escapeHtml(c.club)}">${escapeHtml(c.club)} (${c.count})</button>`).join('')}
             `;
             
             container.querySelectorAll('.club-pill').forEach(btn => {
@@ -193,7 +497,7 @@
                     container.querySelectorAll('.club-pill').forEach(b => b.classList.remove('active'));
                     btn.classList.add('active');
                     currentClubFilter = btn.dataset.club;
-                    window.golfData = getFilteredData();
+                    syncChartData(getFilteredData());
                     refreshAllCharts();
                 });
             });
@@ -201,7 +505,7 @@
         
         function refreshAllCharts() {
             const data = getFilteredData();
-            window.golfData = data;
+            syncChartData(data);
             
             // Destroy existing charts
             Chart.helpers.each(Chart.instances, (instance) => {
@@ -209,8 +513,8 @@
             });
             
             // Recreate charts with filtered data
-            if (data.length > 0) {
-                createDispersionChart();
+                if (data.length > 0) {
+                    createDispersionChart();
                 createDistanceChart();
                 createLaunchChart();
                 createSpinChart();
@@ -221,20 +525,37 @@
                 createBallSpeedChart();
                 createCarryTotalChart();
                 createLoftChart();
-                createDirectionChart();
-                createGappingChart();
-                renderAllClubsFacePathModule('allClubsFacePathChart', 'allClubsFacePathLegend', data);
+                    createDirectionChart();
+                    createGappingChart();
+                    renderAllClubsFacePathModule('allClubsFacePathChart', 'allClubsFacePathLegend', data);
+                    renderFacePathInsights(data);
+                    renderFacePathActions(data);
+                }
             }
-        }
         
-        window.addEventListener('load', () => {
+        window.addEventListener('load', async () => {
             const savedData = localStorage.getItem('currentGolfData');
-            if (savedData && savedData !== '[]') {
-                allGolfData = JSON.parse(savedData);
-                window.golfData = allGolfData;
+            const currentData = savedData && savedData !== '[]' ? JSON.parse(savedData) : [];
+            await reloadChartSessions();
+
+            if (!allChartSessions.length && currentData.length) {
+                allChartSessions = [{
+                    id: 'current-working-data',
+                    name: 'Current Working Data',
+                    date: localStorage.getItem('lastUploadTime') ? new Date(Number(localStorage.getItem('lastUploadTime'))).toISOString() : null,
+                    data: currentData
+                }];
+            }
+
+            currentSessionFilter = 'all';
+            allGolfData = getSelectedSessionShots();
+
+            if (allGolfData.length) {
+                syncChartData(allGolfData);
                 document.getElementById('dataLoaded').classList.remove('hidden');
                 document.getElementById('noData').style.display = 'none';
                 
+                setupSessionFilter();
                 setupGlobalFilter();
                 
                 // Create all charts (except apex - removed due to no data)
@@ -252,10 +573,17 @@
                 createDirectionChart();
                 createGappingChart();
                 renderAllClubsFacePathModule('allClubsFacePathChart', 'allClubsFacePathLegend', allGolfData);
+                renderFacePathInsights(allGolfData);
+                renderFacePathActions(allGolfData);
             } else {
                 document.getElementById('dataLoaded').style.display = 'none';
                 document.getElementById('noData').classList.remove('hidden');
             }
+        });
+
+        window.addEventListener('sessions:changed', async () => {
+            await reloadChartSessions();
+            applyCurrentFilters();
         });
     </script>
     
@@ -263,5 +591,6 @@
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="supabase-client.js"></script>
     <script src="sync-service.js"></script>
+    <script src="animations.js"></script>
 </body>
 </html>

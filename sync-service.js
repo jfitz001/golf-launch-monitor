@@ -33,8 +33,13 @@ class SyncService {
     
     async checkConnection() {
         try {
-            const response = await fetch('/upload', {
-                method: 'HEAD',
+            if (navigator.onLine === false) {
+                if (this.isOnline) this.handleOffline();
+                return;
+            }
+
+            const response = await fetch('/.netlify/functions/check-rate-limit', {
+                method: 'GET',
                 cache: 'no-store'
             });
             

@@ -10,6 +10,7 @@
 html {
     -webkit-text-size-adjust: 100%;
     touch-action: manipulation;
+    overflow-x: hidden;
 }
 
 :root {
@@ -48,6 +49,7 @@ body {
         radial-gradient(ellipse at 100% 0%, rgba(39,183,118,0.1) 0%, transparent 50%),
         radial-gradient(ellipse at 50% 100%, rgba(15,75,56,0.08) 0%, transparent 60%);
     background-attachment: fixed;
+    overflow-x: hidden;
 }
 
 .container {
@@ -383,19 +385,20 @@ nav {
 .sessions-panel {
     position: fixed;
     top: 0;
-    right: -400px;
-    width: 420px;
+    right: 0;
+    width: min(420px, 100vw);
     height: 100vh;
     background: var(--surface);
     border-left: 1px solid var(--border);
     box-shadow: -24px 0 40px -34px rgba(8, 50, 37, 0.55);
-    transition: right 0.3s ease;
+    transform: translateX(calc(100% + 2px));
+    transition: transform 0.3s ease;
     z-index: 999;
     overflow-y: auto;
 }
 
 .sessions-panel.open {
-    right: 0;
+    transform: translateX(0);
 }
 
 .sessions-panel-header {
@@ -436,6 +439,11 @@ nav {
 
 .sessions-list {
     padding: 18px;
+}
+
+#saveSessionBtn,
+#clubUsageSidebar {
+    display: none !important;
 }
 
 .session-item {
@@ -782,6 +790,14 @@ nav {
     border-radius: 16px;
     padding: 24px;
     border: 1px solid var(--border);
+    min-height: 360px;
+}
+
+.chart-card > canvas {
+    display: block;
+    width: 100% !important;
+    height: 320px !important;
+    max-height: 320px;
 }
 
 .chart-card h3 {
@@ -806,6 +822,231 @@ nav {
     border-radius: 1px;
 }
 
+.progress-filter-bar {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 24px;
+    padding: 14px 16px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+}
+
+.progress-filter-bar label {
+    color: var(--text-secondary);
+    font-size: 14px;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+    text-transform: uppercase;
+}
+
+.progress-filter-bar select {
+    background: var(--surface-light);
+    color: var(--text);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 10px 14px;
+    font: inherit;
+    font-size: 14px;
+    font-weight: 600;
+}
+
+.trend-summary-panel {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 24px;
+    margin-bottom: 24px;
+}
+
+.trend-summary-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 16px;
+    margin-bottom: 18px;
+}
+
+.trend-summary-header h2 {
+    color: var(--text);
+    font-size: 22px;
+    line-height: 1.2;
+    margin: 0 0 4px;
+}
+
+.trend-summary-header p {
+    color: var(--text-secondary);
+    margin: 0;
+    font-size: 14px;
+}
+
+.trend-session-count {
+    color: var(--primary);
+    background: var(--surface-light);
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    padding: 8px 12px;
+    font-size: 13px;
+    font-weight: 800;
+    white-space: nowrap;
+}
+
+.trend-summary-grid {
+    display: grid;
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+    gap: 12px;
+}
+
+.trend-summary-card {
+    background: var(--surface-light);
+    border: 1px solid var(--border);
+    border-left: 4px solid var(--text-secondary);
+    border-radius: 12px;
+    padding: 14px;
+    min-width: 0;
+}
+
+.trend-summary-card.improving {
+    border-left-color: var(--success);
+}
+
+.trend-summary-card.regressing {
+    border-left-color: var(--danger);
+}
+
+.trend-summary-card.flat {
+    border-left-color: var(--warning);
+}
+
+.trend-summary-card span,
+.trend-summary-card small {
+    display: block;
+    color: var(--text-secondary);
+    font-size: 11px;
+    font-weight: 800;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+}
+
+.trend-summary-card strong {
+    display: block;
+    color: var(--text);
+    font-size: 26px;
+    line-height: 1.1;
+    margin-top: 8px;
+}
+
+.trend-summary-card em {
+    display: block;
+    color: var(--primary);
+    font-style: normal;
+    font-size: 13px;
+    font-weight: 800;
+    margin-top: 6px;
+}
+
+.trend-summary-card.regressing em {
+    color: var(--danger);
+}
+
+.trend-summary-card small {
+    margin-top: 8px;
+    font-size: 10px;
+}
+
+.progress-session-card {
+    background: var(--surface-light);
+    border: 1px solid var(--border);
+    border-left: 4px solid var(--primary);
+    border-radius: 12px;
+    padding: 18px;
+}
+
+.progress-session-head {
+    display: flex;
+    justify-content: space-between;
+    gap: 16px;
+    margin-bottom: 14px;
+}
+
+.progress-session-head h4 {
+    color: var(--text);
+    font-size: 18px;
+    line-height: 1.25;
+    margin: 0 0 4px;
+}
+
+.progress-session-head p {
+    color: var(--text-secondary);
+    margin: 0;
+    font-size: 13px;
+}
+
+.progress-session-head span {
+    color: var(--primary);
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    height: fit-content;
+    padding: 6px 10px;
+    font-size: 12px;
+    font-weight: 800;
+    white-space: nowrap;
+}
+
+.progress-session-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+}
+
+.progress-session-grid div {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 10px;
+    min-width: 0;
+}
+
+.progress-session-grid span,
+.progress-session-grid em {
+    display: block;
+    color: var(--text-secondary);
+    font-size: 11px;
+    font-weight: 800;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+}
+
+.progress-session-grid strong {
+    display: block;
+    color: var(--text);
+    font-size: 20px;
+    line-height: 1.1;
+    margin-top: 5px;
+}
+
+.progress-session-grid em {
+    color: var(--primary);
+    font-style: normal;
+    margin-top: 5px;
+    text-transform: none;
+    letter-spacing: 0;
+}
+
+.progress-load-session {
+    width: 100%;
+    margin-top: 14px;
+}
+
+.progress-empty,
+.progress-save-note {
+    color: var(--text-secondary);
+    font-size: 14px;
+    margin: 14px 0 0;
+}
+
 .chart-subtitle {
     margin: -8px 0 12px;
     font-size: 13px;
@@ -813,7 +1054,16 @@ nav {
 }
 
 .chart-container-tall {
+    position: relative;
+    width: 100%;
     height: 360px;
+    min-height: 360px;
+}
+
+.chart-container-tall canvas {
+    display: block;
+    width: 100% !important;
+    height: 100% !important;
 }
 
 .facepath-insights-card {
@@ -1008,6 +1258,48 @@ nav {
     align-items: center;
     gap: 16px;
     flex-wrap: wrap;
+}
+
+.chart-filter-bar {
+    align-items: flex-start;
+}
+
+.chart-filter-group {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+}
+
+.chart-filter-group-wide {
+    flex: 1 1 420px;
+}
+
+.session-filter-select {
+    appearance: none;
+    background: var(--surface-light);
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    color: var(--text);
+    cursor: pointer;
+    font: inherit;
+    font-size: 13px;
+    font-weight: 700;
+    min-width: 250px;
+    padding: 8px 36px 8px 14px;
+    background-image:
+        linear-gradient(45deg, transparent 50%, var(--primary) 50%),
+        linear-gradient(135deg, var(--primary) 50%, transparent 50%);
+    background-position:
+        calc(100% - 18px) 50%,
+        calc(100% - 13px) 50%;
+    background-size: 5px 5px, 5px 5px;
+    background-repeat: no-repeat;
+}
+
+.session-filter-select:focus {
+    outline: 2px solid rgba(28, 185, 125, 0.28);
+    border-color: var(--primary);
 }
 
 .filter-label {
@@ -1450,7 +1742,57 @@ nav {
         margin-bottom: 12px;
     }
 
-    .facepath-kpi-grid {
+    .progress-filter-bar {
+        align-items: stretch;
+        flex-direction: column;
+        gap: 8px;
+        padding: 12px;
+    }
+
+    .progress-filter-bar select {
+        width: 100%;
+    }
+
+    .trend-summary-panel {
+        padding: 16px;
+    }
+
+    .trend-summary-header {
+        flex-direction: column;
+        gap: 10px;
+    }
+
+    .trend-summary-header h2 {
+        font-size: 18px;
+    }
+
+    .trend-summary-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 10px;
+    }
+
+    .trend-summary-card {
+        padding: 12px;
+    }
+
+    .trend-summary-card strong {
+        font-size: 22px;
+    }
+
+    .progress-session-card {
+        padding: 14px;
+    }
+
+    .progress-session-head {
+        flex-direction: column;
+        gap: 8px;
+    }
+
+    .progress-session-head span {
+        width: fit-content;
+    }
+
+    .progress-session-grid {
         grid-template-columns: 1fr;
     }
 
@@ -1468,8 +1810,9 @@ nav {
         grid-template-columns: 1fr;
     }
 
-    canvas {
-        max-height: 250px !important;
+    .chart-container-tall {
+        height: 280px;
+        min-height: 280px;
     }
 
     .insights-section,
@@ -1528,7 +1871,6 @@ nav {
 
     .sessions-panel {
         width: 100%;
-        right: -100%;
     }
 
     .sessions-panel-header {
@@ -1567,13 +1909,13 @@ nav {
 /* Mobile nav and filter */
 @media (max-width: 768px) {
     nav {
-        display: flex;
-        flex-wrap: nowrap;
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
         gap: 8px;
-        overflow-x: auto;
-        -webkit-overflow-scrolling: touch;
-        padding-bottom: 2px;
-        scrollbar-width: none;
+        overflow: visible;
+        -webkit-overflow-scrolling: auto;
+        padding-bottom: 0;
+        scrollbar-width: auto;
     }
 
     nav::-webkit-scrollbar {
@@ -1581,12 +1923,18 @@ nav {
     }
     
     .nav-link {
-        flex: 0 0 auto;
+        display: flex;
+        align-items: center;
+        justify-content: center;
         white-space: nowrap;
-        padding: 9px 14px;
+        padding: 10px 10px;
         font-size: 12px;
         margin-right: 0;
         border-radius: 11px;
+    }
+
+    .main-nav .nav-link#admin-link {
+        display: none !important;
     }
     
     .global-filter-bar {
@@ -1594,6 +1942,16 @@ nav {
         flex-direction: column;
         align-items: flex-start;
         gap: 10px;
+    }
+
+    .chart-filter-group {
+        width: 100%;
+        align-items: flex-start;
+    }
+
+    .session-filter-select {
+        width: 100%;
+        min-width: 0;
     }
     
     .club-filter-pills {
@@ -1625,6 +1983,15 @@ nav {
     .score-history-chart-container {
         height: 120px;
     }
+
+    .chart-card {
+        min-height: auto;
+    }
+
+    .chart-card > canvas {
+        height: 240px !important;
+        max-height: 240px;
+    }
 }
 
 /* Small mobile (iPhone SE, etc) */
@@ -1646,8 +2013,12 @@ nav {
         font-size: 18px;
     }
     
+    nav {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
     .nav-link {
-        padding: 8px 11px;
+        padding: 8px 9px;
         font-size: 11px;
     }
 
@@ -1672,8 +2043,14 @@ nav {
         font-size: 14px;
     }
 
-    canvas {
-        max-height: 200px !important;
+    .chart-container-tall {
+        height: 240px;
+        min-height: 240px;
+    }
+
+    .chart-card > canvas {
+        height: 210px !important;
+        max-height: 210px;
     }
 
     .insights-content,
@@ -1690,4 +2067,312 @@ nav {
         padding: 12px;
         font-size: 12px;
     }
+}
+
+/* ═══════════════════════════════════════════════
+   ANIMATION SYSTEM
+   ═══════════════════════════════════════════════ */
+
+html {
+    scroll-behavior: smooth;
+}
+
+/* Page entrance */
+.page-enter {
+    opacity: 0;
+    transform: translateY(8px);
+}
+.page-enter-active {
+    opacity: 1;
+    transform: translateY(0);
+    transition: opacity 0.4s ease, transform 0.4s ease;
+}
+
+/* Scroll-triggered fade-in-up */
+@keyframes fadeInUp {
+    from {
+        opacity: 0;
+        transform: translateY(22px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+@keyframes scaleIn {
+    from {
+        opacity: 0;
+        transform: scale(0.96);
+    }
+    to {
+        opacity: 1;
+        transform: scale(1);
+    }
+}
+
+@keyframes slideInDown {
+    from {
+        opacity: 0;
+        transform: translateY(-14px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* Elements that animate in via IntersectionObserver */
+.stat-card,
+.chart-card,
+.quick-link-card,
+.drill-card,
+.insights-section,
+.drills-section,
+.score-history-section,
+.global-filter-bar {
+    opacity: 0;
+    transform: translateY(18px);
+    transition:
+        opacity 0.45s ease calc(var(--anim-delay, 0ms)),
+        transform 0.45s cubic-bezier(0.22, 1, 0.36, 1) calc(var(--anim-delay, 0ms)),
+        box-shadow 0.25s ease,
+        border-color 0.25s ease,
+        background 0.25s ease;
+}
+
+.stat-card.anim-visible,
+.chart-card.anim-visible,
+.quick-link-card.anim-visible,
+.drill-card.anim-visible,
+.insights-section.anim-visible,
+.drills-section.anim-visible,
+.score-history-section.anim-visible,
+.global-filter-bar.anim-visible {
+    opacity: 1;
+    transform: translateY(0);
+}
+
+/* Session items animate in sequence */
+.session-item {
+    opacity: 0;
+    transform: translateX(-8px);
+    transition:
+        opacity 0.3s ease,
+        transform 0.3s cubic-bezier(0.22, 1, 0.36, 1),
+        background 0.2s ease,
+        border-color 0.2s ease,
+        box-shadow 0.2s ease;
+}
+
+.session-item.anim-visible {
+    opacity: 1;
+    transform: translateX(0);
+}
+
+/* Header entrance */
+header {
+    animation: slideInDown 0.5s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+/* Swing score entrance */
+.swing-score {
+    animation: scaleIn 0.55s cubic-bezier(0.34, 1.56, 0.64, 1) 0.15s both;
+}
+
+/* Upload section entrance */
+.upload-section {
+    animation: fadeInUp 0.5s ease 0.1s both;
+}
+
+/* Upload idle pulse on border */
+@keyframes pulse-border {
+    0%, 100% { border-color: var(--border); }
+    50% { border-color: rgba(15, 75, 56, 0.35); }
+}
+
+.upload-card.upload-idle {
+    animation: pulse-border 3.5s ease-in-out infinite;
+}
+.upload-card:hover,
+.upload-card:focus-within {
+    animation: none !important;
+}
+
+/* ── Ripple ── */
+.upload-button,
+.primary-button,
+.new-session-btn,
+.nav-link,
+.club-pill,
+.session-item-btn {
+    position: relative;
+    overflow: hidden;
+}
+
+@keyframes ripple-wave {
+    to {
+        transform: scale(2.5);
+        opacity: 0;
+    }
+}
+
+.ripple-wave {
+    position: absolute;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.35);
+    transform: scale(0);
+    animation: ripple-wave 0.55s linear forwards;
+    pointer-events: none;
+    z-index: 0;
+}
+
+/* Ripple on dark buttons (use lighter ripple) */
+.sessions-toggle .ripple-wave,
+.sessions-toggle {
+    overflow: hidden;
+}
+
+/* ── Mobile touch active state ── */
+.touch-active {
+    transform: scale(0.97) !important;
+    opacity: 0.88;
+}
+
+/* ── Club pills spring animation ── */
+.club-pill {
+    transition: all 0.2s cubic-bezier(0.34, 1.56, 0.64, 1) !important;
+}
+
+.club-pill.active {
+    transform: scale(1.04);
+}
+
+/* ── Nav links smooth transition ── */
+.nav-link {
+    transition: all 0.2s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+/* ── Sessions panel smooth cubic ── */
+.sessions-panel {
+    transition: transform 0.38s cubic-bezier(0.22, 1, 0.36, 1) !important;
+    touch-action: pan-y;
+}
+
+/* Session panel open/close - smoother */
+.sessions-panel.open {
+    transform: translateX(0);
+    box-shadow: -16px 0 48px -16px rgba(8, 50, 37, 0.4);
+}
+
+/* ── Overlay when sessions open ── */
+.sessions-overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(8, 40, 28, 0.35);
+    z-index: 998;
+    backdrop-filter: blur(2px);
+    opacity: 0;
+    transition: opacity 0.3s ease;
+}
+.sessions-overlay.visible {
+    display: block;
+    opacity: 1;
+}
+
+/* ── Stat card hover spring ── */
+.stat-card {
+    transition:
+        opacity 0.45s ease var(--anim-delay, 0ms),
+        transform 0.45s cubic-bezier(0.22, 1, 0.36, 1) var(--anim-delay, 0ms),
+        box-shadow 0.25s ease,
+        background 0.2s ease !important;
+}
+
+.stat-card:hover {
+    transform: translateY(-4px) !important;
+}
+
+/* ── Quick link card hover ── */
+.quick-link-card {
+    transition:
+        opacity 0.45s ease var(--anim-delay, 0ms),
+        transform 0.45s cubic-bezier(0.22, 1, 0.36, 1) var(--anim-delay, 0ms),
+        box-shadow 0.25s ease,
+        border-color 0.2s ease,
+        background 0.25s ease !important;
+}
+
+/* ── Drill card hover ── */
+.drill-card {
+    transition:
+        opacity 0.45s ease var(--anim-delay, 0ms),
+        transform 0.4s cubic-bezier(0.22, 1, 0.36, 1) var(--anim-delay, 0ms),
+        box-shadow 0.25s ease,
+        background 0.2s ease !important;
+}
+
+/* ── Chart card ── */
+.chart-card {
+    transition:
+        opacity 0.45s ease var(--anim-delay, 0ms),
+        transform 0.45s cubic-bezier(0.22, 1, 0.36, 1) var(--anim-delay, 0ms),
+        box-shadow 0.25s ease !important;
+}
+
+/* ── Focus ring ── */
+:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 3px;
+    border-radius: 6px;
+}
+
+button:focus-visible,
+a:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 3px;
+}
+
+/* ── Reduced motion ── */
+@media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+        scroll-behavior: auto !important;
+    }
+
+    .stat-card,
+    .chart-card,
+    .quick-link-card,
+    .drill-card,
+    .session-item,
+    .insights-section,
+    .drills-section,
+    .score-history-section,
+    .global-filter-bar {
+        opacity: 1 !important;
+        transform: none !important;
+    }
+}
+
+/* ── Mobile: Disable hover effects that can stick ── */
+@media (hover: none) {
+    .stat-card:hover,
+    .chart-card:hover,
+    .quick-link-card:hover,
+    .drill-card:hover,
+    .upload-card:hover,
+    .session-item:hover {
+        transform: none !important;
+    }
+
+    /* Restore touch active state */
+    .touch-active {
+        transform: scale(0.97) !important;
+    }
+}
 }

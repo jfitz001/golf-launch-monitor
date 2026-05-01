@@ -30,6 +30,7 @@
             Sessions
         </button>
 
+        <div class="sessions-overlay" id="sessionsOverlay"></div>
         <div class="sessions-panel" id="sessionsPanel">
             <div class="sessions-panel-header">
                 <div class="sessions-panel-title">Session History</div>
@@ -45,17 +46,17 @@
 
         <div class="container">
             <header>
-                <div style="display: flex; justify-content: space-between; align-items: center;">
+                <div class="header-top-row">
                     <div>
                         <h1>Session Overview</h1>
                         <p class="subtitle">Track Progress Over Time</p>
                     </div>
                     <div class="user-bar">
-                        <span id="user-email" style="margin-right: 16px; color: var(--text-secondary);"></span>
+                        <span id="user-email"></span>
                         <button id="logout-btn" class="secondary-button">Logout</button>
                     </div>
                 </div>
-                <nav style="margin-top: 20px;">
+                <nav class="main-nav">
                     <a href="/upload" class="nav-link">Upload</a>
                     <a href="/progress" class="nav-link active">Progress</a>
                     <a href="/charts" class="nav-link">Charts</a>
@@ -79,7 +80,7 @@
                         <div class="stat-value" id="bestScore">0</div>
                     </div>
                     <div class="stat-card">
-                        <div class="stat-label">Avg Improvement</div>
+                        <div class="stat-label">Offline Improvement</div>
                         <div class="stat-value" id="avgImprovement">--</div>
                     </div>
                     <div class="stat-card">
@@ -88,23 +89,33 @@
                     </div>
                 </div>
 
+                <section id="trendSummary" class="trend-summary-panel"></section>
+
                 <!-- Trend Charts -->
                 <div class="charts-grid">
                     <div class="chart-card">
                         <h3>Swing Score Progress</h3>
-                        <canvas id="scoreProgressChart"></canvas>
+                        <div class="chart-container-tall"><canvas id="scoreProgressChart"></canvas></div>
                     </div>
                     <div class="chart-card">
                         <h3>Distance Trends</h3>
-                        <canvas id="distanceTrendsChart"></canvas>
+                        <div class="chart-container-tall"><canvas id="distanceTrendsChart"></canvas></div>
                     </div>
                     <div class="chart-card">
                         <h3>Consistency Improvement</h3>
-                        <canvas id="consistencyTrendsChart"></canvas>
+                        <div class="chart-container-tall"><canvas id="consistencyTrendsChart"></canvas></div>
                     </div>
                     <div class="chart-card">
                         <h3>Club Performance by Session</h3>
-                        <canvas id="clubTrendsChart"></canvas>
+                        <div class="chart-container-tall"><canvas id="clubTrendsChart"></canvas></div>
+                    </div>
+                    <div class="chart-card">
+                        <h3>Offline Miss Trend</h3>
+                        <div class="chart-container-tall"><canvas id="offlineTrendChart"></canvas></div>
+                    </div>
+                    <div class="chart-card">
+                        <h3>Face-to-Path Variability</h3>
+                        <div class="chart-container-tall"><canvas id="facePathVarianceChart"></canvas></div>
                     </div>
                 </div>
 
@@ -134,5 +145,6 @@
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="supabase-client.js"></script>
     <script src="sync-service.js"></script>
+    <script src="animations.js"></script>
 </body>
 </html>

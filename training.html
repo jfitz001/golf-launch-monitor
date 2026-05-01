@@ -29,6 +29,7 @@
             Sessions
         </button>
 
+        <div class="sessions-overlay" id="sessionsOverlay"></div>
         <div class="sessions-panel" id="sessionsPanel">
             <div class="sessions-panel-header">
                 <div class="sessions-panel-title">Session History</div>
@@ -44,17 +45,17 @@
 
         <div class="container">
             <header>
-                <div style="display: flex; justify-content: space-between; align-items: center;">
+                <div class="header-top-row">
                     <div>
                         <h1>Training Recommendations</h1>
                         <p class="subtitle">Personalized Practice Drills</p>
                     </div>
                     <div class="user-bar">
-                        <span id="user-email" style="margin-right: 16px; color: var(--text-secondary);"></span>
+                        <span id="user-email"></span>
                         <button id="logout-btn" class="secondary-button">Logout</button>
                     </div>
                 </div>
-                <nav style="margin-top: 20px;">
+                <nav class="main-nav">
                     <a href="/upload" class="nav-link">Upload</a>
                     <a href="/progress" class="nav-link">Progress</a>
                     <a href="/charts" class="nav-link">Charts</a>
@@ -122,5 +123,6 @@
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="supabase-client.js"></script>
     <script src="sync-service.js"></script>
+    <script src="animations.js"></script>
 </body>
 </html>

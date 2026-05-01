@@ -2,6 +2,15 @@ let golfData = [];
 // Make golfData globally accessible
 window.golfData = golfData;
 let charts = {};
+const uploadUtils = window.UploadSessionUtils || {};
+
+function setGolfData(nextData) {
+    golfData = Array.isArray(nextData) ? nextData : [];
+    window.golfData = golfData;
+    return golfData;
+}
+
+window.setGolfData = setGolfData;
 
 async function checkUserRateLimit(endpoint = 'app-action') {
     const currentUser = netlifyIdentity?.currentUser();
@@ -94,13 +103,17 @@ async function upsertWorkingDataToCloud(workingData, options = {}) {
         });
 
         if (!response.ok) {
-            throw new Error(await response.text());
+            const errorText = await response.text();
+            const error = new Error(errorText || `Cloud sync failed (${response.status})`);
+            error.status = response.status;
+            error.retryable = response.status >= 500 || response.status === 408 || response.status === 429;
+            throw error;
         }
 
         const result = await response.json();
         return { success: true, queued: false, ...result };
     } catch (error) {
-        if (queueIfOffline && window.syncService) {
+        if (queueIfOffline && window.syncService && error?.retryable) {
             window.syncService.addToQueue({
                 type: 'upsert-working-data',
                 data: payload
@@ -125,7 +138,11 @@ window.addEventListener('load', async () => {
     const existingShots = loadStoredShots();
     const summary = document.getElementById('uploadSummary');
     if (summary && existingShots.length > 0) {
-        summary.textContent = `Current session: ${existingShots.length} shots loaded. Upload more CSV files to append.`;
+        const loadedMeta = typeof window.getLoadedSessionMeta === 'function'
+            ? window.getLoadedSessionMeta()
+            : { name: null };
+        const loadedLabel = loadedMeta?.name ? `Loaded session: ${loadedMeta.name}. ` : '';
+        summary.textContent = `${loadedLabel}${existingShots.length} shots loaded in working set. Upload CSV to add or start new session.`;
     }
 
     if (existingShots.length === 0) {
@@ -244,21 +261,42 @@ function loadStoredShots() {
     }
 }
 
-function getShotFingerprint(shot) {
-    const keys = Object.keys(shot).sort();
-    return keys.map(key => `${key}:${shot[key] || ''}`).join('|');
-}
-
 function dedupeShots(shots) {
+    if (typeof uploadUtils.dedupeShots === 'function') {
+        return uploadUtils.dedupeShots(shots);
+    }
     const seen = new Set();
     const deduped = [];
-    shots.forEach(shot => {
-        const key = getShotFingerprint(shot);
+    (Array.isArray(shots) ? shots : []).forEach((shot) => {
+        const key = JSON.stringify(shot || {});
         if (seen.has(key)) return;
         seen.add(key);
         deduped.push(shot);
     });
     return deduped;
+}
+
+function askUploadSessionMode(existingShotsCount = 0) {
+    if (existingShotsCount <= 0) return 'replace';
+
+    const loadedMeta = typeof window.getLoadedSessionMeta === 'function'
+        ? window.getLoadedSessionMeta()
+        : { id: null, name: null };
+    const loadedText = loadedMeta?.name
+        ? `Loaded session: "${loadedMeta.name}".\n`
+        : '';
+
+    const choice = window.prompt(
+        `${loadedText}Upload mode:\n1 = Add CSV to current working session\n2 = Start NEW session (replace current working shots)\n\nEnter 1 or 2:`,
+        loadedMeta?.id ? '1' : '2'
+    );
+
+    if (choice === null) return 'cancel';
+    const normalized = String(choice).trim().toLowerCase();
+    if (normalized === '1' || normalized === 'add' || normalized === 'append') return 'append';
+    if (normalized === '2' || normalized === 'new' || normalized === 'replace') return 'replace';
+    alert('Upload cancelled. Enter 1 (add) or 2 (new session).');
+    return 'cancel';
 }
 
 function updateUploadSummary(fileCount, newShotsCount, totalShotsCount, dedupedCount = 0) {
@@ -276,7 +314,16 @@ async function processFiles(files) {
         const texts = await Promise.all(validFiles.map(readCsvFile));
         const newShots = texts.flatMap(text => parseCSVToShots(text));
         const existingShots = (Array.isArray(golfData) && golfData.length > 0) ? golfData : loadStoredShots();
-        const mergedShots = dedupeShots([...existingShots, ...newShots]);
+        const uploadMode = askUploadSessionMode(existingShots.length);
+        if (uploadMode === 'cancel') return;
+
+        const mergeResult = (typeof uploadUtils.mergeShotsForUpload === 'function')
+            ? uploadUtils.mergeShotsForUpload(existingShots, newShots, uploadMode)
+            : {
+                mergedShots: dedupeShots([...(uploadMode === 'replace' ? [] : existingShots), ...newShots]),
+                dedupedCount: 0
+            };
+        const mergedShots = mergeResult.mergedShots;
 
         golfData = mergedShots;
         window.golfData = mergedShots;
@@ -285,10 +332,20 @@ async function processFiles(files) {
         localStorage.setItem('golfData', JSON.stringify(mergedShots));
         localStorage.setItem('lastUploadTime', Date.now().toString());
 
-        await upsertWorkingDataToCloud(mergedShots, { queueIfOffline: true });
-
-        const dedupedCount = (existingShots.length + newShots.length) - mergedShots.length;
+        const cloudResult = await upsertWorkingDataToCloud(mergedShots, { queueIfOffline: true });
+        const dedupedCount = Number(mergeResult?.dedupedCount || 0);
         updateUploadSummary(validFiles.length, newShots.length, mergedShots.length, dedupedCount);
+
+        if (uploadMode === 'replace' && typeof window.setLoadedSessionId === 'function') {
+            window.setLoadedSessionId(null);
+            if (typeof window.updateSessionsList === 'function') {
+                await window.updateSessionsList();
+            }
+        }
+
+        if (cloudResult?.queued) {
+            console.warn('Working data sync queued:', cloudResult.error || 'retry later');
+        }
 
         if (typeof window.updateClubSidebar === 'function') {
             window.updateClubSidebar(mergedShots);
@@ -600,7 +657,7 @@ function createDistanceChart() {
         },
         options: {
             responsive: true,
-            maintainAspectRatio: true,
+            maintainAspectRatio: false,
             plugins: {
                 legend: { display: false },
                 tooltip: {
@@ -673,7 +730,7 @@ function createSpinChart() {
         },
         options: {
             responsive: true,
-            maintainAspectRatio: true,
+            maintainAspectRatio: false,
             plugins: {
                 legend: { display: false }
             },
@@ -773,7 +830,7 @@ function createPathChart() {
         },
         options: {
             responsive: true,
-            maintainAspectRatio: true,
+            maintainAspectRatio: false,
             plugins: {
                 legend: { 
                     labels: { 
@@ -869,7 +926,7 @@ function createLaunchChart() {
         },
         options: {
             responsive: true,
-            maintainAspectRatio: true,
+            maintainAspectRatio: false,
             plugins: {
                 legend: { display: false },
                 tooltip: {
@@ -1962,7 +2019,7 @@ function createSmashChart() {
         },
         options: {
             responsive: true,
-            maintainAspectRatio: true,
+            maintainAspectRatio: false,
             plugins: {
                 legend: { display: false }
             },
@@ -2023,7 +2080,7 @@ function createAttackChart() {
         },
         options: {
             responsive: true,
-            maintainAspectRatio: true,
+            maintainAspectRatio: false,
             plugins: {
                 legend: { labels: { color: '#f1f5f9' } }
             },
@@ -2068,7 +2125,7 @@ function createConsistencyChart(selectedClub = null) {
     
     // Populate club filter dropdown (only on first call)
     const clubFilter = document.getElementById('club-filter');
-    if (clubFilter.options.length === 1) { // Only "All Clubs" option
+    if (clubFilter && clubFilter.options.length === 1) { // Only "All Clubs" option
         Object.keys(clubGroups).sort().forEach(club => {
             const option = document.createElement('option');
             option.value = club;
@@ -2147,7 +2204,7 @@ function createConsistencyChart(selectedClub = null) {
         },
         options: {
             responsive: true,
-            maintainAspectRatio: true,
+            maintainAspectRatio: false,
             plugins: {
                 legend: { labels: { color: '#f1f5f9' } },
                 title: {
@@ -2210,7 +2267,7 @@ function createBallSpeedChart() {
         },
         options: {
             responsive: true,
-            maintainAspectRatio: true,
+            maintainAspectRatio: false,
             plugins: {
                 legend: { labels: { color: '#f1f5f9' } },
                 title: {
@@ -2268,7 +2325,7 @@ function createCarryTotalChart() {
         },
         options: {
             responsive: true,
-            maintainAspectRatio: true,
+            maintainAspectRatio: false,
             plugins: {
                 legend: { labels: { color: '#f1f5f9' } },
                 title: {
@@ -2331,7 +2388,7 @@ function createLoftChart() {
         },
         options: {
             responsive: true,
-            maintainAspectRatio: true,
+            maintainAspectRatio: false,
             plugins: {
                 legend: { labels: { color: '#f1f5f9' } },
                 title: {
@@ -2391,7 +2448,7 @@ function createDirectionChart() {
         },
         options: {
             responsive: true,
-            maintainAspectRatio: true,
+            maintainAspectRatio: false,
             plugins: {
                 legend: { labels: { color: '#f1f5f9' } },
                 title: {
@@ -2456,7 +2513,7 @@ function createApexChart() {
         },
         options: {
             responsive: true,
-            maintainAspectRatio: true,
+            maintainAspectRatio: false,
             plugins: {
                 legend: { display: false },
                 title: {
@@ -2523,7 +2580,7 @@ function createGappingChart() {
         },
         options: {
             responsive: true,
-            maintainAspectRatio: true,
+            maintainAspectRatio: false,
             plugins: {
                 legend: { display: false },
                 title: {

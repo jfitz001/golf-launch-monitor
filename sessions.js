@@ -21,43 +21,7 @@ function getShotClubName(shot) {
 }
 
 function renderSidebarClubUsage(shots = []) {
-    const panelHeader = document.querySelector('.sessions-panel-header');
-    if (!panelHeader) return;
-
-    let section = document.getElementById('clubUsageSidebar');
-    if (!section) {
-        section = document.createElement('div');
-        section.id = 'clubUsageSidebar';
-        section.className = 'club-usage-sidebar';
-        panelHeader.appendChild(section);
-    }
-
-    if (!Array.isArray(shots) || shots.length === 0) {
-        section.innerHTML = `
-            <div class="club-usage-title">Clubs In Current Data</div>
-            <div class="club-usage-empty">Upload CSV data to see club flags.</div>
-        `;
-        return;
-    }
-
-    const counts = shots.reduce((acc, shot) => {
-        const club = getShotClubName(shot);
-        acc[club] = (acc[club] || 0) + 1;
-        return acc;
-    }, {});
-
-    const sortedClubs = Object.entries(counts)
-        .sort((a, b) => b[1] - a[1])
-        .slice(0, 18);
-
-    const pills = sortedClubs
-        .map(([club, count]) => `<span class="club-pill">${club} <strong>${count}</strong></span>`)
-        .join('');
-
-    section.innerHTML = `
-        <div class="club-usage-title">Clubs In Current Data</div>
-        <div class="club-usage-pills">${pills}</div>
-    `;
+    document.getElementById('clubUsageSidebar')?.remove();
 }
 
 function loadCurrentShotsFromStorage() {
@@ -69,6 +33,40 @@ function loadCurrentShotsFromStorage() {
     } catch (error) {
         return [];
     }
+}
+
+const ACTIVE_SESSION_STORAGE_KEY = 'activeSessionId';
+
+function setCurrentSessionId(nextId) {
+    const normalized = (nextId === null || nextId === undefined || nextId === '')
+        ? null
+        : String(nextId);
+    currentSessionId = normalized;
+    if (normalized) {
+        localStorage.setItem(ACTIVE_SESSION_STORAGE_KEY, normalized);
+    } else {
+        localStorage.removeItem(ACTIVE_SESSION_STORAGE_KEY);
+    }
+    return currentSessionId;
+}
+
+function getCurrentSessionId() {
+    if (currentSessionId) return String(currentSessionId);
+    const stored = localStorage.getItem(ACTIVE_SESSION_STORAGE_KEY);
+    if (!stored) return null;
+    currentSessionId = String(stored);
+    return currentSessionId;
+}
+
+function getLoadedSessionMeta() {
+    const activeId = getCurrentSessionId();
+    if (!activeId) return { id: null, name: null };
+    const sessions = readLocalSessionsNormalized();
+    const matched = sessions.find((session) => String(session?.id) === String(activeId));
+    return {
+        id: activeId,
+        name: matched?.name || null
+    };
 }
 
 function normalizeSessionRecord(session, fallbackIndex = 0) {
@@ -256,9 +254,11 @@ async function saveCurrentSession() {
     
     // Show loading state
     const btn = document.getElementById('saveSessionBtn');
-    const originalText = btn.textContent;
-    btn.textContent = 'Saving...';
-    btn.disabled = true;
+    const originalText = btn?.textContent || '';
+    if (btn) {
+        btn.textContent = 'Saving...';
+        btn.disabled = true;
+    }
     
     // Temporarily set global golfData for stat calculations
     const originalGolfData = typeof golfData !== 'undefined' ? golfData : null;
@@ -297,11 +297,13 @@ async function saveCurrentSession() {
     
     const result = await saveSessions(session);
     
-    btn.textContent = originalText;
-    btn.disabled = false;
+    if (btn) {
+        btn.textContent = originalText;
+        btn.disabled = false;
+    }
     
     if (result.success) {
-        currentSessionId = String(result?.savedSession?.id || session.id);
+        setCurrentSessionId(String(result?.savedSession?.id || session.id));
         await updateSessionsList();
         
         if (result.offline) {
@@ -351,10 +353,13 @@ async function deleteSessionById(sessionId) {
     localStorage.setItem('savedSessions', JSON.stringify(filtered));
     
     if (String(currentSessionId) === targetId) {
-        currentSessionId = null;
+        setCurrentSessionId(null);
     }
     
     await updateSessionsList();
+    window.dispatchEvent(new CustomEvent('sessions:changed', {
+        detail: { action: 'delete', sessionId: targetId }
+    }));
 }
 
 async function loadSession(sessionId) {
@@ -371,6 +376,7 @@ async function loadSession(sessionId) {
     localStorage.setItem('currentGolfData', JSON.stringify(session.data));
     localStorage.setItem('golfData', JSON.stringify(session.data));
     localStorage.setItem('lastUploadTime', Date.now().toString());
+    setCurrentSessionId(session.id);
     
     // Update global golfData
     if (typeof golfData !== 'undefined') {
@@ -405,7 +411,8 @@ async function updateSessionsList() {
         sessions.sort((a, b) => new Date(b.date || 0) - new Date(a.date || 0)).forEach(session => {
             const div = document.createElement('div');
             div.className = 'session-item';
-            if (session.id === currentSessionId) {
+            const activeId = getCurrentSessionId();
+            if (String(session.id) === String(activeId || '')) {
                 div.classList.add('active');
             }
             
@@ -423,24 +430,11 @@ async function updateSessionsList() {
                     <span>${shotCount} shots</span>
                 </div>
                 <div class="session-item-actions">
-                    <button class="session-item-btn load-btn" data-id="${session.id}">Load</button>
                     <button class="session-item-btn delete delete-btn" data-id="${session.id}">Delete</button>
                 </div>
             `;
             
             listDiv.appendChild(div);
-        });
-        
-        // Add event listeners
-        document.querySelectorAll('.load-btn').forEach(btn => {
-            btn.addEventListener('click', async (e) => {
-                e.stopPropagation();
-                const sessionId = String(btn.dataset.id || '');
-                await loadSession(sessionId);
-                currentSessionId = sessionId;
-                await updateSessionsList();
-                document.getElementById('sessionsPanel').classList.remove('open');
-            });
         });
         
         document.querySelectorAll('.delete-btn').forEach(btn => {
@@ -746,7 +740,7 @@ const sessionsPanelCloseBtn = document.getElementById('sessionsPanelClose');
 const sessionsPanel = document.getElementById('sessionsPanel');
 
 if (saveSessionBtn) {
-    saveSessionBtn.addEventListener('click', saveCurrentSession);
+    saveSessionBtn.remove();
 }
 
 if (sessionsToggleBtn && sessionsPanel) {
@@ -775,6 +769,9 @@ document.addEventListener('click', (e) => {
 window.updateClubSidebar = (shots) => {
     renderSidebarClubUsage(Array.isArray(shots) ? shots : loadCurrentShotsFromStorage());
 };
+window.setLoadedSessionId = setCurrentSessionId;
+window.getLoadedSessionId = getCurrentSessionId;
+window.getLoadedSessionMeta = getLoadedSessionMeta;
 
 window.addEventListener('golf-data-updated', (event) => {
     const shots = event?.detail?.shots;
@@ -783,6 +780,7 @@ window.addEventListener('golf-data-updated', (event) => {
 
 // Initialize on load
 window.addEventListener('load', () => {
+    getCurrentSessionId();
     renderSidebarClubUsage(loadCurrentShotsFromStorage());
     updateSessionsList();
 });

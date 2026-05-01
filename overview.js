@@ -2,216 +2,370 @@
 
 let allSessions = [];
 let selectedClub = 'all';
+const overviewCharts = {};
+
+const METRIC_DIRECTION = {
+    score: 'higher',
+    avgCarry: 'higher',
+    bestShot: 'higher',
+    consistency: 'higher',
+    avgOfflineAbs: 'lower',
+    facePathStd: 'lower',
+    smash: 'higher',
+    launch: 'higher'
+};
+
+function chartTheme() {
+    const css = getComputedStyle(document.documentElement);
+    const text = (css.getPropertyValue('--text') || '').trim() || '#14221b';
+    const textSecondary = (css.getPropertyValue('--text-secondary') || '').trim() || '#587264';
+    const border = (css.getPropertyValue('--border') || '').trim() || '#d2dfd6';
+    return {
+        legend: text,
+        axis: textSecondary,
+        grid: border
+    };
+}
+
+function baseChartOptions(extra = {}) {
+    const t = chartTheme();
+    return {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+            legend: {
+                labels: { color: t.legend, boxWidth: 18 }
+            }
+        },
+        scales: {
+            y: {
+                grid: { color: t.grid },
+                ticks: { color: t.axis },
+                title: { color: t.axis }
+            },
+            x: {
+                grid: { color: t.grid },
+                ticks: { color: t.axis },
+                title: { color: t.axis }
+            }
+        },
+        ...extra
+    };
+}
+
+function destroyChart(id) {
+    if (overviewCharts[id]) {
+        overviewCharts[id].destroy();
+        delete overviewCharts[id];
+    }
+}
+
+function createChart(id, config) {
+    const canvas = document.getElementById(id);
+    if (!canvas) return;
+    destroyChart(id);
+    overviewCharts[id] = new Chart(canvas.getContext('2d'), config);
+}
+
+function numericShotValue(shot, keys) {
+    for (const key of keys) {
+        const value = parseFloat(shot?.[key]);
+        if (Number.isFinite(value)) return value;
+    }
+    return null;
+}
+
+function avg(values) {
+    const valid = values.filter(Number.isFinite);
+    if (!valid.length) return null;
+    return valid.reduce((sum, value) => sum + value, 0) / valid.length;
+}
+
+function std(values) {
+    const valid = values.filter(Number.isFinite);
+    if (valid.length < 2) return null;
+    const mean = avg(valid);
+    return Math.sqrt(avg(valid.map((value) => (value - mean) ** 2)));
+}
+
+function fmt(value, digits = 1, fallback = '--') {
+    return Number.isFinite(value) ? value.toFixed(digits) : fallback;
+}
+
+function signed(value, digits = 1, suffix = '') {
+    if (!Number.isFinite(value)) return '--';
+    return `${value > 0 ? '+' : ''}${value.toFixed(digits)}${suffix}`;
+}
+
+function getSessionShots(session) {
+    if (Array.isArray(session?.data)) return session.data;
+    if (Array.isArray(session?.shot_data)) return session.shot_data;
+    if (Array.isArray(session?.session_data)) return session.session_data;
+    return [];
+}
+
+function getShotClubName(shot) {
+    return (
+        shot?.['Club Name'] ||
+        shot?.['Club Type'] ||
+        shot?.Club ||
+        shot?.club ||
+        shot?.['Club name'] ||
+        shot?.['club name'] ||
+        shot?.ClubName ||
+        'Unknown'
+    );
+}
+
+function detectClubFromSession(session) {
+    const shots = getSessionShots(session);
+    const counts = shots.reduce((acc, shot) => {
+        const club = getShotClubName(shot);
+        if (!club || club === 'Unknown') return acc;
+        acc[club] = (acc[club] || 0) + 1;
+        return acc;
+    }, {});
+    const topClub = Object.entries(counts).sort((a, b) => b[1] - a[1])[0]?.[0];
+    if (topClub) return topClub;
+
+    if (session?.name) {
+        const match = String(session.name).match(/(\d+[\s-]?(iron|wood|hybrid|driver|wedge)|gap wedge|sand wedge|lob wedge)/i);
+        if (match) return match[1].trim().replace(/\s+/g, ' ');
+    }
+
+    return session?.club_type || 'Unknown';
+}
+
+function calculateSessionMetrics(session) {
+    const shots = getSessionShots(session);
+    const carry = shots.map((s) => numericShotValue(s, ['Carry Distance', 'Carry Dist.', 'Carry']));
+    const total = shots.map((s) => numericShotValue(s, ['Total Distance', 'Total']));
+    const clubSpeed = shots.map((s) => numericShotValue(s, ['Club Speed']));
+    const ballSpeed = shots.map((s) => numericShotValue(s, ['Ball Speed']));
+    const smash = shots.map((s) => numericShotValue(s, ['Smash Factor']));
+    const launch = shots.map((s) => numericShotValue(s, ['Launch Angle']));
+    const offlineAbs = shots
+        .map((s) => numericShotValue(s, ['Carry Deviation Distance', 'Total Deviation Distance']))
+        .filter(Number.isFinite)
+        .map((value) => Math.abs(value));
+    const faceToPath = shots
+        .map((s) => {
+            const face = numericShotValue(s, ['Club Face']);
+            const path = numericShotValue(s, ['Club Path']);
+            return Number.isFinite(face) && Number.isFinite(path) ? face - path : null;
+        })
+        .filter(Number.isFinite);
+
+    const avgCarry = Number.isFinite(parseFloat(session?.stats?.avgCarry))
+        ? parseFloat(session.stats.avgCarry)
+        : (Number.isFinite(parseFloat(session?.avgCarry)) ? parseFloat(session.avgCarry) : avg(carry));
+    const bestShot = Number.isFinite(parseFloat(session?.stats?.bestShot))
+        ? parseFloat(session.stats.bestShot)
+        : avg([Math.max(...carry.filter(Number.isFinite))]);
+    const carryStd = std(carry);
+    const consistency = Number.isFinite(parseFloat(session?.stats?.consistency))
+        ? parseFloat(session.stats.consistency)
+        : (Number.isFinite(avgCarry) && Number.isFinite(carryStd) && avgCarry > 0
+            ? Math.max(0, 100 - (carryStd / avgCarry * 100))
+            : null);
+    const score = Number.isFinite(parseFloat(session?.swingScore?.score))
+        ? parseFloat(session.swingScore.score)
+        : (Number.isFinite(consistency) ? Math.round(consistency) : null);
+
+    return {
+        shots: shots.length,
+        avgCarry,
+        bestShot,
+        totalAvg: avg(total),
+        clubSpeed: avg(clubSpeed),
+        ballSpeed: avg(ballSpeed),
+        smash: avg(smash),
+        launch: avg(launch),
+        avgOfflineAbs: avg(offlineAbs),
+        facePathStd: std(faceToPath),
+        facePathAvg: avg(faceToPath),
+        consistency,
+        score
+    };
+}
+
+function normalizeProgressSessions(sessions) {
+    return (Array.isArray(sessions) ? sessions : [])
+        .map((session, index) => {
+            const date = new Date(session?.date || session?.created_at || session?.timestamp || Date.now());
+            const data = getSessionShots(session);
+            return {
+                ...session,
+                id: String(session?.id || session?.session_id || `${date.getTime()}-${index}`),
+                date: date.toISOString(),
+                data,
+                club: detectClubFromSession({ ...session, data }),
+                metrics: calculateSessionMetrics({ ...session, data })
+            };
+        })
+        .filter((session) => session.data.length > 0)
+        .sort((a, b) => new Date(a.date) - new Date(b.date));
+}
 
 window.addEventListener('load', async () => {
-    // Load sessions from Supabase (will fallback to localStorage if needed)
-    allSessions = await loadSessions();
+    allSessions = normalizeProgressSessions(await loadSessions());
     const currentData = localStorage.getItem('currentGolfData');
-    
-    // Check if we have either saved sessions OR a currently loaded session
+
     if (allSessions.length === 0 && (!currentData || currentData === '[]')) {
         document.getElementById('dataLoaded').style.display = 'none';
         document.getElementById('noData').classList.remove('hidden');
         return;
     }
-    
+
     document.getElementById('dataLoaded').classList.remove('hidden');
     document.getElementById('noData').style.display = 'none';
-    
-    // If we have saved sessions, show full progress tracking
+
     if (allSessions.length > 0) {
-        // Detect clubs and create filter
         createClubFilter(allSessions);
-        
-        // Display with selected filter
         displayFilteredSessions();
     } else {
-        // Only have current session - show single session stats
         displayCurrentSessionStats();
     }
 });
 
 function createClubFilter(sessions) {
-    // Extract unique clubs from sessions
-    const clubs = new Set();
-    sessions.forEach(session => {
-        const club = detectClubFromSession(session);
-        if (club && club !== 'Unknown') {
-            clubs.add(club);
-        }
-    });
-    
-    if (clubs.size === 0) {
-        return; // No club data available
-    }
-    
-    // Create filter UI
+    const clubs = new Set(sessions.map((session) => session.club).filter((club) => club && club !== 'Unknown'));
+    if (!clubs.size || document.getElementById('clubFilter')) return;
+
     const filterHTML = `
-        <div style="margin-bottom: 24px; display: flex; align-items: center; gap: 12px;">
-            <label style="color: var(--text-secondary); font-weight: 500;">Filter by Club:</label>
-            <select id="clubFilter" style="background: var(--surface); color: var(--text); border: 1px solid var(--border); border-radius: 8px; padding: 8px 16px; font-size: 15px; cursor: pointer;">
+        <div class="progress-filter-bar">
+            <label for="clubFilter">Filter by Club</label>
+            <select id="clubFilter">
                 <option value="all">All Clubs (${sessions.length} sessions)</option>
-                ${Array.from(clubs).sort().map(club => {
-                    const count = sessions.filter(s => detectClubFromSession(s) === club).length;
+                ${Array.from(clubs).sort().map((club) => {
+                    const count = sessions.filter((session) => session.club === club).length;
                     return `<option value="${club}">${club} (${count} sessions)</option>`;
                 }).join('')}
             </select>
         </div>
     `;
-    
-    const container = document.getElementById('dataLoaded');
-    container.insertAdjacentHTML('afterbegin', filterHTML);
-    
-    // Add change listener
-    document.getElementById('clubFilter').addEventListener('change', (e) => {
-        selectedClub = e.target.value;
+
+    document.getElementById('dataLoaded').insertAdjacentHTML('afterbegin', filterHTML);
+    document.getElementById('clubFilter').addEventListener('change', (event) => {
+        selectedClub = event.target.value;
         displayFilteredSessions();
     });
 }
 
-function detectClubFromSession(session) {
-    // Try to extract club from session data
-    if (session.data && session.data.length > 0) {
-        // Check first shot for club type
-        const firstShot = session.data[0];
-        if (firstShot['Club'] || firstShot['club']) {
-            return firstShot['Club'] || firstShot['club'];
-        }
-    }
-    
-    // Try to extract from session name (e.g., "5 Iron - Jan 15" or "5 iron session")
-    if (session.name) {
-        const match = session.name.match(/(\d+[\s\-]?(iron|wood|hybrid|driver|wedge))/i);
-        if (match) {
-            return match[1].trim();
-        }
-    }
-    
-    // Fallback to club_type if available
-    if (session.club_type) {
-        return session.club_type;
-    }
-    
-    return 'Unknown';
-}
-
 function displayFilteredSessions() {
-    const filteredSessions = selectedClub === 'all' 
-        ? allSessions 
-        : allSessions.filter(s => detectClubFromSession(s) === selectedClub);
-    
+    const filteredSessions = selectedClub === 'all'
+        ? allSessions
+        : allSessions.filter((session) => session.club === selectedClub);
+
     if (filteredSessions.length === 0) {
-        document.getElementById('dataLoaded').innerHTML = `
-            <p style="text-align: center; color: var(--text-secondary); padding: 40px;">
-                No sessions found for ${selectedClub}
-            </p>
-        `;
+        document.getElementById('sessionHistory').innerHTML = `<div class="progress-empty">No sessions found for ${selectedClub}</div>`;
         return;
     }
-    
+
     displaySummaryStats(filteredSessions);
+    displayTrendSummary(filteredSessions);
     createProgressCharts(filteredSessions);
     displaySessionHistory(filteredSessions);
+    window.reObserveAnimations?.();
+}
+
+function getMetricDelta(sessions, metric) {
+    if (sessions.length < 2) return null;
+    const latest = sessions[sessions.length - 1]?.metrics?.[metric];
+    const previous = sessions[sessions.length - 2]?.metrics?.[metric];
+    if (!Number.isFinite(latest) || !Number.isFinite(previous)) return null;
+    return latest - previous;
+}
+
+function trendClass(metric, delta) {
+    if (!Number.isFinite(delta) || Math.abs(delta) < 0.05) return 'flat';
+    const direction = METRIC_DIRECTION[metric] || 'higher';
+    const improved = direction === 'higher' ? delta > 0 : delta < 0;
+    return improved ? 'improving' : 'regressing';
 }
 
 function displaySummaryStats(sessions) {
-    // Total sessions
     document.getElementById('totalSessions').textContent = sessions.length;
-    
-    // Best swing score
-    const scores = sessions.map(s => s.swingScore?.score || 0);
-    const bestScore = Math.max(...scores);
-    document.getElementById('bestScore').textContent = bestScore > 0 ? bestScore : '--';
-    
-    // Average improvement (session-over-session)
-    let improvements = [];
-    for (let i = 1; i < sessions.length; i++) {
-        const prev = sessions[i-1].swingScore?.score || 0;
-        const curr = sessions[i].swingScore?.score || 0;
-        if (prev > 0 && curr > 0) {
-            improvements.push(curr - prev);
-        }
-    }
-    const avgImprovement = improvements.length > 0 
-        ? improvements.reduce((a,b) => a+b, 0) / improvements.length 
-        : 0;
-    document.getElementById('avgImprovement').textContent = 
-        avgImprovement > 0 ? `+${avgImprovement.toFixed(1)}` : avgImprovement.toFixed(1);
-    
-    // Practice hours (estimate: 15min per session)
-    const hours = (sessions.length * 15 / 60).toFixed(1);
+
+    const scores = sessions.map((session) => session.metrics.score).filter(Number.isFinite);
+    document.getElementById('bestScore').textContent = scores.length ? Math.max(...scores).toFixed(0) : '--';
+
+    const offlineDelta = getMetricDelta(sessions, 'avgOfflineAbs');
+    document.getElementById('avgImprovement').textContent = Number.isFinite(offlineDelta)
+        ? signed(-offlineDelta, 1, ' yd')
+        : '--';
+
+    const totalShots = sessions.reduce((sum, session) => sum + (session.metrics.shots || 0), 0);
+    const hours = Math.max(sessions.length * 0.25, totalShots / 120).toFixed(1);
     document.getElementById('practiceHours').textContent = `${hours}h`;
 }
 
+function displayTrendSummary(sessions) {
+    const container = document.getElementById('trendSummary');
+    if (!container) return;
+
+    const latest = sessions[sessions.length - 1];
+    const previous = sessions[sessions.length - 2];
+    const cards = [
+        { label: 'Avg Carry', metric: 'avgCarry', unit: ' yd', digits: 1 },
+        { label: 'Offline Miss', metric: 'avgOfflineAbs', unit: ' yd', digits: 1 },
+        { label: 'Face-Path Spread', metric: 'facePathStd', unit: ' deg', digits: 1 },
+        { label: 'Consistency', metric: 'consistency', unit: '%', digits: 0 },
+        { label: 'Smash', metric: 'smash', unit: '', digits: 2 },
+        { label: 'Launch', metric: 'launch', unit: ' deg', digits: 1 }
+    ];
+
+    const latestDate = latest ? new Date(latest.date).toLocaleDateString() : '';
+    const previousDate = previous ? new Date(previous.date).toLocaleDateString() : '';
+
+    container.innerHTML = `
+        <div class="trend-summary-header">
+            <div>
+                <h2>Latest Session Progress</h2>
+                <p>${previous ? `${previousDate} to ${latestDate}` : 'Save another session to unlock deltas.'}</p>
+            </div>
+            <div class="trend-session-count">${sessions.length} session${sessions.length === 1 ? '' : 's'}</div>
+        </div>
+        <div class="trend-summary-grid">
+            ${cards.map((card) => {
+                const value = latest?.metrics?.[card.metric];
+                const delta = getMetricDelta(sessions, card.metric);
+                const cls = trendClass(card.metric, delta);
+                const deltaText = Number.isFinite(delta) ? signed(delta, card.digits, card.unit) : '--';
+                const direction = METRIC_DIRECTION[card.metric] === 'lower' ? 'Lower is better' : 'Higher is better';
+                return `
+                    <div class="trend-summary-card ${cls}">
+                        <span>${card.label}</span>
+                        <strong>${fmt(value, card.digits)}${Number.isFinite(value) ? card.unit : ''}</strong>
+                        <em>${deltaText} vs prior</em>
+                        <small>${direction}</small>
+                    </div>
+                `;
+            }).join('')}
+        </div>
+    `;
+}
+
 function displayCurrentSessionStats() {
-    // Show stats for currently loaded session only
     try {
         const currentData = JSON.parse(localStorage.getItem('currentGolfData') || '[]');
-        
-        if (currentData.length === 0) {
+
+        if (!currentData.length) {
             document.getElementById('dataLoaded').style.display = 'none';
             document.getElementById('noData').classList.remove('hidden');
             return;
         }
-        
-        // Calculate basic stats from current data
-        const carryDistances = currentData.map(s => parseFloat(s['Carry Distance']) || 0).filter(d => d > 0);
-        const avgCarry = carryDistances.reduce((a, b) => a + b, 0) / carryDistances.length;
-        const stdDev = Math.sqrt(carryDistances.map(x => Math.pow(x - avgCarry, 2)).reduce((a, b) => a + b) / carryDistances.length);
-        const consistency = Math.max(0, 100 - (stdDev / avgCarry * 100));
-        
-        // Update summary cards
-        document.getElementById('totalSessions').textContent = '1';
-        document.getElementById('bestScore').textContent = Math.round(consistency);
-        document.getElementById('avgImprovement').textContent = '--';
-        document.getElementById('practiceHours').textContent = '0.25h';
-        
-        // Create a single-session "history" for charts
-        const singleSession = {
+
+        const singleSession = normalizeProgressSessions([{
             name: 'Current Session',
-            timestamp: Date.now(),
-            data: currentData,
-            swingScore: {
-                score: Math.round(consistency),
-                description: 'Current session'
-            },
-            stats: {
-                avgCarry: avgCarry.toFixed(1),
-                consistency: consistency.toFixed(0),
-                totalShots: currentData.length
-            }
-        };
-        
-        // Create charts with just this one session
+            date: new Date().toISOString(),
+            data: currentData
+        }])[0];
+
+        displaySummaryStats([singleSession]);
+        displayTrendSummary([singleSession]);
         createProgressCharts([singleSession]);
-        
-        // Display session history
-        const historyDiv = document.getElementById('sessionHistory');
-        historyDiv.innerHTML = `
-            <div class="drill-card" style="background: var(--card);">
-                <h3>${singleSession.name}</h3>
-                <p style="color: var(--text-secondary); margin: 8px 0;">
-                    ${new Date(singleSession.timestamp).toLocaleDateString()} at ${new Date(singleSession.timestamp).toLocaleTimeString()}
-                </p>
-                <div class="stats-grid" style="margin-top: 16px;">
-                    <div>
-                        <div style="color: var(--text-secondary); font-size: 0.875rem;">Shots</div>
-                        <div style="font-size: 1.5rem; font-weight: bold; color: var(--primary);">${singleSession.stats.totalShots}</div>
-                    </div>
-                    <div>
-                        <div style="color: var(--text-secondary); font-size: 0.875rem;">Avg Distance</div>
-                        <div style="font-size: 1.5rem; font-weight: bold; color: var(--primary);">${singleSession.stats.avgCarry} yds</div>
-                    </div>
-                    <div>
-                        <div style="color: var(--text-secondary); font-size: 0.875rem;">Consistency</div>
-                        <div style="font-size: 1.5rem; font-weight: bold; color: var(--primary);">${singleSession.stats.consistency}%</div>
-                    </div>
-                </div>
-                <p style="margin-top: 16px; color: var(--warning);">
-                    💡 Save this session to track progress over time
-                </p>
-            </div>
-        `;
+        displaySessionHistory([singleSession], true);
     } catch (error) {
         console.error('Error displaying current session:', error);
         document.getElementById('dataLoaded').style.display = 'none';
@@ -224,73 +378,59 @@ function createProgressCharts(sessions) {
     createDistanceTrendsChart(sessions);
     createConsistencyTrendsChart(sessions);
     createClubTrendsChart(sessions);
+    createOfflineTrendChart(sessions);
+    createFacePathVarianceChart(sessions);
 }
 
 function createScoreProgressChart(sessions) {
-    const ctx = document.getElementById('scoreProgressChart').getContext('2d');
-    
-    const labels = sessions.map((s, i) => `Session ${i + 1}`);
-    const scores = sessions.map(s => s.swingScore?.score || null);
-    
-    new Chart(ctx, {
+    const labels = sessions.map((_, index) => `S${index + 1}`);
+    const scores = sessions.map((session) => session.metrics.score);
+
+    createChart('scoreProgressChart', {
         type: 'line',
         data: {
             labels,
             datasets: [{
                 label: 'Swing Score',
                 data: scores,
-                borderColor: 'rgba(124, 58, 237, 1)',
-                backgroundColor: 'rgba(124, 58, 237, 0.1)',
-                tension: 0.4,
+                borderColor: 'rgba(15, 75, 56, 1)',
+                backgroundColor: 'rgba(15, 75, 56, 0.12)',
+                tension: 0.35,
                 fill: true,
-                pointRadius: 6,
-                pointHoverRadius: 8
+                pointRadius: 5
             }, {
                 label: 'Trend',
                 data: calculateTrendline(scores),
-                borderColor: 'rgba(16, 185, 129, 1)',
+                borderColor: 'rgba(39, 183, 118, 1)',
                 borderDash: [5, 5],
                 pointRadius: 0,
                 fill: false
             }]
         },
-        options: {
-            responsive: true,
-            maintainAspectRatio: true,
+        options: baseChartOptions({
             plugins: {
-                legend: { labels: { color: '#f1f5f9' } },
+                legend: { labels: { color: chartTheme().legend } },
                 title: {
                     display: true,
-                    text: `${scores.filter(s => s !== null).length} sessions tracked`,
-                    color: '#94a3b8',
+                    text: `${scores.filter(Number.isFinite).length} sessions tracked`,
+                    color: chartTheme().axis,
                     font: { size: 12 }
                 }
             },
             scales: {
-                y: {
-                    title: { display: true, text: 'Score (0-100)', color: '#94a3b8' },
-                    grid: { color: 'rgba(71, 85, 105, 0.3)' },
-                    ticks: { color: '#94a3b8' },
-                    min: 0,
-                    max: 100
-                },
-                x: {
-                    grid: { color: 'rgba(71, 85, 105, 0.3)' },
-                    ticks: { color: '#94a3b8' }
-                }
+                y: { title: { display: true, text: 'Score (0-100)' }, min: 0, max: 100 },
+                x: {}
             }
-        }
+        })
     });
 }
 
 function createDistanceTrendsChart(sessions) {
-    const ctx = document.getElementById('distanceTrendsChart').getContext('2d');
-    
-    const labels = sessions.map((s, i) => `S${i + 1}`);
-    const avgDistances = sessions.map(s => parseFloat(s.stats?.avgCarry) || null);
-    const bestDistances = sessions.map(s => parseFloat(s.stats?.bestShot) || null);
-    
-    new Chart(ctx, {
+    const labels = sessions.map((_, index) => `S${index + 1}`);
+    const avgDistances = sessions.map((session) => session.metrics.avgCarry);
+    const bestDistances = sessions.map((session) => session.metrics.bestShot);
+
+    createChart('distanceTrendsChart', {
         type: 'line',
         data: {
             labels,
@@ -298,216 +438,232 @@ function createDistanceTrendsChart(sessions) {
                 label: 'Avg Carry',
                 data: avgDistances,
                 borderColor: 'rgba(59, 130, 246, 1)',
-                backgroundColor: 'rgba(59, 130, 246, 0.1)',
-                tension: 0.4,
+                backgroundColor: 'rgba(59, 130, 246, 0.12)',
+                tension: 0.35,
                 fill: true,
                 pointRadius: 5
             }, {
                 label: 'Best Shot',
                 data: bestDistances,
-                borderColor: 'rgba(16, 185, 129, 1)',
-                backgroundColor: 'rgba(16, 185, 129, 0.1)',
-                tension: 0.4,
+                borderColor: 'rgba(31, 164, 99, 1)',
+                backgroundColor: 'rgba(31, 164, 99, 0.12)',
+                tension: 0.35,
                 fill: false,
                 pointRadius: 5
             }]
         },
-        options: {
-            responsive: true,
-            maintainAspectRatio: true,
-            plugins: {
-                legend: { labels: { color: '#f1f5f9' } }
-            },
+        options: baseChartOptions({
             scales: {
-                y: {
-                    title: { display: true, text: 'Distance (yards)', color: '#94a3b8' },
-                    grid: { color: 'rgba(71, 85, 105, 0.3)' },
-                    ticks: { color: '#94a3b8' }
-                },
-                x: {
-                    grid: { color: 'rgba(71, 85, 105, 0.3)' },
-                    ticks: { color: '#94a3b8' }
-                }
+                y: { title: { display: true, text: 'Distance (yards)' }, min: 0 },
+                x: {}
             }
-        }
+        })
     });
 }
 
 function createConsistencyTrendsChart(sessions) {
-    const ctx = document.getElementById('consistencyTrendsChart').getContext('2d');
-    
-    const labels = sessions.map((s, i) => `S${i + 1}`);
-    const consistency = sessions.map(s => parseFloat(s.stats?.consistency) || null);
-    
-    new Chart(ctx, {
+    const labels = sessions.map((_, index) => `S${index + 1}`);
+    const consistency = sessions.map((session) => session.metrics.consistency);
+
+    createChart('consistencyTrendsChart', {
         type: 'bar',
         data: {
             labels,
             datasets: [{
                 label: 'Consistency %',
                 data: consistency,
-                backgroundColor: consistency.map(c => 
-                    c >= 90 ? 'rgba(16, 185, 129, 0.6)' :
-                    c >= 80 ? 'rgba(245, 158, 11, 0.6)' :
-                    'rgba(239, 68, 68, 0.6)'
+                backgroundColor: consistency.map((value) =>
+                    value >= 90 ? 'rgba(31, 164, 99, 0.65)' :
+                    value >= 80 ? 'rgba(204, 143, 36, 0.65)' :
+                    'rgba(214, 65, 65, 0.65)'
                 ),
-                borderColor: consistency.map(c => 
-                    c >= 90 ? 'rgba(16, 185, 129, 1)' :
-                    c >= 80 ? 'rgba(245, 158, 11, 1)' :
-                    'rgba(239, 68, 68, 1)'
+                borderColor: consistency.map((value) =>
+                    value >= 90 ? 'rgba(31, 164, 99, 1)' :
+                    value >= 80 ? 'rgba(204, 143, 36, 1)' :
+                    'rgba(214, 65, 65, 1)'
                 ),
                 borderWidth: 2
             }]
         },
-        options: {
-            responsive: true,
-            maintainAspectRatio: true,
-            plugins: {
-                legend: { display: false }
-            },
+        options: baseChartOptions({
+            plugins: { legend: { display: false } },
             scales: {
-                y: {
-                    title: { display: true, text: 'Consistency %', color: '#94a3b8' },
-                    grid: { color: 'rgba(71, 85, 105, 0.3)' },
-                    ticks: { color: '#94a3b8' },
-                    min: 0,
-                    max: 100
-                },
-                x: {
-                    grid: { color: 'rgba(71, 85, 105, 0.3)' },
-                    ticks: { color: '#94a3b8' }
-                }
+                y: { title: { display: true, text: 'Consistency %' }, min: 0, max: 100 },
+                x: {}
             }
-        }
+        })
     });
 }
 
 function createClubTrendsChart(sessions) {
-    const ctx = document.getElementById('clubTrendsChart').getContext('2d');
-    
-    // Extract club performance by session
     const clubData = {};
-    sessions.forEach((session, idx) => {
-        const club = detectClubFromSession(session);
-        if (!clubData[club]) clubData[club] = [];
-        clubData[club].push({
-            session: idx + 1,
-            avgCarry: parseFloat(session.stats?.avgCarry) || 0
-        });
+    sessions.forEach((session, index) => {
+        if (!clubData[session.club]) clubData[session.club] = [];
+        clubData[session.club].push({ session: index + 1, avgCarry: session.metrics.avgCarry });
     });
-    
-    const datasets = Object.keys(clubData).map((club, idx) => ({
+
+    const datasets = Object.keys(clubData).map((club, index) => ({
         label: club,
-        data: sessions.map((_, sIdx) => {
-            const match = clubData[club].find(d => d.session === sIdx + 1);
+        data: sessions.map((_, sessionIndex) => {
+            const match = clubData[club].find((row) => row.session === sessionIndex + 1);
             return match ? match.avgCarry : null;
         }),
-        borderColor: `hsl(${idx * 60}, 70%, 50%)`,
-        backgroundColor: `hsla(${idx * 60}, 70%, 50%, 0.1)`,
-        tension: 0.4,
+        borderColor: `hsl(${(index * 67) % 360}, 68%, 43%)`,
+        backgroundColor: `hsla(${(index * 67) % 360}, 68%, 43%, 0.12)`,
+        tension: 0.35,
         pointRadius: 5,
         spanGaps: true
     }));
-    
-    new Chart(ctx, {
+
+    createChart('clubTrendsChart', {
         type: 'line',
         data: {
-            labels: sessions.map((_, i) => `S${i + 1}`),
+            labels: sessions.map((_, index) => `S${index + 1}`),
             datasets
         },
-        options: {
-            responsive: true,
-            maintainAspectRatio: true,
-            plugins: {
-                legend: { labels: { color: '#f1f5f9' } }
-            },
+        options: baseChartOptions({
             scales: {
-                y: {
-                    title: { display: true, text: 'Avg Distance (yards)', color: '#94a3b8' },
-                    grid: { color: 'rgba(71, 85, 105, 0.3)' },
-                    ticks: { color: '#94a3b8' }
-                },
-                x: {
-                    grid: { color: 'rgba(71, 85, 105, 0.3)' },
-                    ticks: { color: '#94a3b8' }
-                }
+                y: { title: { display: true, text: 'Avg Carry (yards)' }, min: 0 },
+                x: {}
             }
-        }
+        })
     });
 }
 
-function displaySessionHistory(sessions) {
-    const container = document.getElementById('sessionHistory');
-    
-    const html = sessions.slice().reverse().map((session, idx) => {
-        const actualIdx = sessions.length - 1 - idx;
-        const date = new Date(session.timestamp || session.date);
-        const dateStr = date.toLocaleDateString() + ' ' + date.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
-        const club = detectClubFromSession(session);
-        
-        return `
-            <div class="drill-card">
-                <h4>Session ${actualIdx + 1}: ${club}</h4>
-                <p style="color: var(--text-secondary); font-size: 13px; margin: 8px 0;">${dateStr}</p>
-                <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; margin-top: 12px;">
-                    <div>
-                        <div style="color: var(--text-secondary); font-size: 12px;">Swing Score</div>
-                        <div style="font-size: 20px; font-weight: 600; color: var(--primary);">
-                            ${session.swingScore?.score || '--'}
-                        </div>
-                    </div>
-                    <div>
-                        <div style="color: var(--text-secondary); font-size: 12px;">Avg Carry</div>
-                        <div style="font-size: 20px; font-weight: 600; color: var(--primary);">
-                            ${session.stats?.avgCarry || '--'} yds
-                        </div>
-                    </div>
-                    <div>
-                        <div style="color: var(--text-secondary); font-size: 12px;">Shots</div>
-                        <div style="font-size: 20px; font-weight: 600; color: var(--primary);">
-                            ${session.stats?.shots || session.data?.length || 0}
-                        </div>
-                    </div>
-                    <div>
-                        <div style="color: var(--text-secondary); font-size: 12px;">Consistency</div>
-                        <div style="font-size: 20px; font-weight: 600; color: var(--primary);">
-                            ${session.stats?.consistency || '--'}%
-                        </div>
-                    </div>
-                </div>
-                <button onclick="loadSession(${actualIdx})" class="secondary-button" style="margin-top: 16px; width: 100%;">
-                    Load This Session
-                </button>
-            </div>
-        `;
-    }).join('');
-    
-    container.innerHTML = html;
+function createOfflineTrendChart(sessions) {
+    const labels = sessions.map((_, index) => `S${index + 1}`);
+    const offlineAvg = sessions.map((session) => session.metrics.avgOfflineAbs);
+
+    createChart('offlineTrendChart', {
+        type: 'line',
+        data: {
+            labels,
+            datasets: [{
+                label: 'Avg |Offline|',
+                data: offlineAvg,
+                borderColor: 'rgba(204, 143, 36, 1)',
+                backgroundColor: 'rgba(204, 143, 36, 0.16)',
+                tension: 0.35,
+                fill: true,
+                pointRadius: 5
+            }]
+        },
+        options: baseChartOptions({
+            plugins: { legend: { display: false } },
+            scales: {
+                y: { title: { display: true, text: 'Avg |Offline| (yd)' }, min: 0 },
+                x: {}
+            }
+        })
+    });
 }
 
-async function loadSession(index) {
-    const session = allSessions[index];
-    
+function createFacePathVarianceChart(sessions) {
+    const labels = sessions.map((_, index) => `S${index + 1}`);
+    const variance = sessions.map((session) => session.metrics.facePathStd);
+
+    createChart('facePathVarianceChart', {
+        type: 'bar',
+        data: {
+            labels,
+            datasets: [{
+                label: 'F2P Std Dev',
+                data: variance,
+                backgroundColor: variance.map((value) => Number.isFinite(value) && value <= 2
+                    ? 'rgba(31, 164, 99, 0.65)'
+                    : Number.isFinite(value) && value <= 3.5
+                        ? 'rgba(204, 143, 36, 0.65)'
+                        : 'rgba(214, 65, 65, 0.65)'),
+                borderColor: variance.map((value) => Number.isFinite(value) && value <= 2
+                    ? 'rgba(31, 164, 99, 1)'
+                    : Number.isFinite(value) && value <= 3.5
+                        ? 'rgba(204, 143, 36, 1)'
+                        : 'rgba(214, 65, 65, 1)'),
+                borderWidth: 2
+            }]
+        },
+        options: baseChartOptions({
+            plugins: { legend: { display: false } },
+            scales: {
+                y: { title: { display: true, text: 'Std Dev (deg)' }, min: 0 },
+                x: {}
+            }
+        })
+    });
+}
+
+function displaySessionHistory(sessions, currentOnly = false) {
+    const container = document.getElementById('sessionHistory');
+    if (!container) return;
+
+    const html = sessions.slice().reverse().map((session) => {
+        const index = sessions.findIndex((candidate) => candidate.id === session.id);
+        const previous = index > 0 ? sessions[index - 1] : null;
+        const date = new Date(session.date);
+        const dateStr = `${date.toLocaleDateString()} ${date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
+        const metrics = session.metrics;
+        const carryDelta = previous ? metrics.avgCarry - previous.metrics.avgCarry : null;
+        const offlineDelta = previous ? metrics.avgOfflineAbs - previous.metrics.avgOfflineAbs : null;
+        const f2pDelta = previous ? metrics.facePathStd - previous.metrics.facePathStd : null;
+
+        return `
+            <article class="progress-session-card anim-visible">
+                <div class="progress-session-head">
+                    <div>
+                        <h4>${session.name || session.club || 'Golf Session'}</h4>
+                        <p>${dateStr}</p>
+                    </div>
+                    <span>${session.club}</span>
+                </div>
+                <div class="progress-session-grid">
+                    <div><span>Shots</span><strong>${metrics.shots}</strong></div>
+                    <div><span>Avg Carry</span><strong>${fmt(metrics.avgCarry)} yd</strong><em>${signed(carryDelta, 1, ' yd')}</em></div>
+                    <div><span>Offline</span><strong>${fmt(metrics.avgOfflineAbs)} yd</strong><em>${signed(offlineDelta, 1, ' yd')}</em></div>
+                    <div><span>F2P Spread</span><strong>${fmt(metrics.facePathStd)} deg</strong><em>${signed(f2pDelta, 1, ' deg')}</em></div>
+                    <div><span>Consistency</span><strong>${fmt(metrics.consistency, 0)}%</strong></div>
+                    <div><span>Smash</span><strong>${fmt(metrics.smash, 2)}</strong></div>
+                </div>
+                ${currentOnly ? '<p class="progress-save-note">Save this session to compare it against future sessions.</p>' : ''}
+                <button data-session-id="${session.id}" class="secondary-button progress-load-session">Load Session</button>
+            </article>
+        `;
+    }).join('');
+
+    container.innerHTML = html || '<div class="progress-empty">No sessions for this filter.</div>';
+    container.querySelectorAll('.progress-load-session').forEach((button) => {
+        button.addEventListener('click', () => loadSessionById(button.dataset.sessionId));
+    });
+}
+
+function loadSessionById(sessionId) {
+    const session = allSessions.find((candidate) => String(candidate.id) === String(sessionId));
     if (session && session.data) {
         localStorage.setItem('currentGolfData', JSON.stringify(session.data));
         localStorage.setItem('golfData', JSON.stringify(session.data));
         localStorage.setItem('lastUploadTime', Date.now().toString());
+        if (typeof window.setLoadedSessionId === 'function') {
+            window.setLoadedSessionId(session.id);
+        }
         window.location.href = '/upload';
     }
 }
 
 function calculateTrendline(data) {
-    const validData = data.map((y, x) => ({x, y})).filter(d => d.y !== null);
+    const validData = data
+        .map((y, x) => ({ x, y }))
+        .filter((point) => Number.isFinite(point.y));
     if (validData.length < 2) return data.map(() => null);
-    
+
     const n = validData.length;
-    const sumX = validData.reduce((sum, d) => sum + d.x, 0);
-    const sumY = validData.reduce((sum, d) => sum + d.y, 0);
-    const sumXY = validData.reduce((sum, d) => sum + d.x * d.y, 0);
-    const sumX2 = validData.reduce((sum, d) => sum + d.x * d.x, 0);
-    
-    const slope = (n * sumXY - sumX * sumY) / (n * sumX2 - sumX * sumX);
+    const sumX = validData.reduce((sum, point) => sum + point.x, 0);
+    const sumY = validData.reduce((sum, point) => sum + point.y, 0);
+    const sumXY = validData.reduce((sum, point) => sum + point.x * point.y, 0);
+    const sumX2 = validData.reduce((sum, point) => sum + point.x * point.x, 0);
+    const denominator = n * sumX2 - sumX * sumX;
+    if (denominator === 0) return data.map(() => null);
+
+    const slope = (n * sumXY - sumX * sumY) / denominator;
     const intercept = (sumY - slope * sumX) / n;
-    
+
     return data.map((_, x) => slope * x + intercept);
 }
