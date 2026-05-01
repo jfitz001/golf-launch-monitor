@@ -32,29 +32,20 @@ class SyncService {
     }
     
     async checkConnection() {
-        try {
-            if (navigator.onLine === false) {
-                if (this.isOnline) this.handleOffline();
-                return;
-            }
+        const browserOnline = navigator.onLine !== false;
+        if (!browserOnline && this.isOnline) {
+            this.handleOffline();
+            return;
+        }
 
-            const response = await fetch('/.netlify/functions/check-rate-limit', {
-                method: 'GET',
-                cache: 'no-store'
-            });
-            
-            const wasOffline = !this.isOnline;
-            this.isOnline = response.ok;
-            
-            if (wasOffline && this.isOnline) {
-                this.handleOnline();
-            } else if (!wasOffline && !this.isOnline) {
-                this.handleOffline();
-            }
-        } catch (error) {
-            if (this.isOnline) {
-                this.handleOffline();
-            }
+        if (browserOnline && !this.isOnline) {
+            this.handleOnline();
+            return;
+        }
+
+        this.isOnline = browserOnline;
+        if (browserOnline && this.syncQueue.length > 0) {
+            this.processQueue();
         }
     }
     
@@ -64,6 +55,24 @@ class SyncService {
             this.syncQueue = this.syncQueue.filter(item =>
                 !(item.type === 'upsert-working-data' && item.data?.userEmail === operation.data.userEmail)
             );
+        }
+        if (operation.type === 'save-session' && operation.data?.email && Array.isArray(operation.data?.shots)) {
+            const nextKey = [
+                operation.data.email,
+                operation.data.sessionName,
+                operation.data.sessionDate,
+                operation.data.shots.length
+            ].join('|');
+            this.syncQueue = this.syncQueue.filter(item => {
+                if (item.type !== 'save-session' || !Array.isArray(item.data?.shots)) return true;
+                const itemKey = [
+                    item.data.email,
+                    item.data.sessionName,
+                    item.data.sessionDate,
+                    item.data.shots.length
+                ].join('|');
+                return itemKey !== nextKey;
+            });
         }
 
         this.syncQueue.push({

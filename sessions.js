@@ -37,6 +37,7 @@ function loadCurrentShotsFromStorage() {
 
 const ACTIVE_SESSION_STORAGE_KEY = 'activeSessionId';
 const SESSION_MIGRATION_LOCK_KEY = 'sessionMigrationInFlight';
+const SAVED_SESSIONS_BACKUP_KEY = 'savedSessionsBackup';
 
 function setCurrentSessionId(nextId) {
     const normalized = (nextId === null || nextId === undefined || nextId === '')
@@ -96,14 +97,60 @@ function normalizeSessionRecord(session, fallbackIndex = 0) {
 }
 
 function readLocalSessionsNormalized() {
+    return readSessionsFromStorageKey('savedSessions');
+}
+
+function readSessionsFromStorageKey(key) {
     try {
-        const raw = JSON.parse(localStorage.getItem('savedSessions') || '[]');
+        const raw = JSON.parse(localStorage.getItem(key) || '[]');
         return (Array.isArray(raw) ? raw : [])
             .map((session, index) => normalizeSessionRecord(session, index))
             .filter(Boolean);
     } catch (error) {
         return [];
     }
+}
+
+function readQueuedSessionSavesNormalized() {
+    try {
+        const raw = JSON.parse(localStorage.getItem('syncQueue') || '[]');
+        if (!Array.isArray(raw)) return [];
+        return raw
+            .filter((item) => item?.type === 'save-session' && Array.isArray(item?.data?.shots))
+            .map((item, index) => normalizeSessionRecord({
+                id: item.id || item.timestamp || `queued-${index}`,
+                name: item.data.sessionName,
+                date: item.data.sessionDate,
+                data: item.data.shots,
+                shotCount: item.data.shots.length
+            }, index))
+            .filter(Boolean);
+    } catch (error) {
+        return [];
+    }
+}
+
+function mergeSessionsByFingerprint(...sessionLists) {
+    const byFingerprint = new Map();
+    sessionLists.flat().forEach((session) => {
+        const normalized = normalizeSessionRecord(session);
+        const fingerprint = getSessionFingerprint(normalized);
+        if (!normalized || !fingerprint) return;
+        byFingerprint.set(fingerprint, normalized);
+    });
+
+    return Array.from(byFingerprint.values()).sort((a, b) => new Date(b.date || 0) - new Date(a.date || 0));
+}
+
+function preserveLocalSessionsBackup() {
+    const current = readLocalSessionsNormalized();
+    const existing = readSessionsFromStorageKey(SAVED_SESSIONS_BACKUP_KEY);
+    const queued = readQueuedSessionSavesNormalized();
+    const merged = mergeSessionsByFingerprint(existing, current, queued);
+    if (merged.length > 0) {
+        localStorage.setItem(SAVED_SESSIONS_BACKUP_KEY, JSON.stringify(merged));
+    }
+    return merged;
 }
 
 function mergeSessions(cloudSessions = [], localSessions = []) {
@@ -192,7 +239,12 @@ async function migrateLocalSessionsToCloud(email, cloudSessions) {
         return cloudSessions;
     }
 
-    const localSessions = readLocalSessionsNormalized();
+    const backupSessions = preserveLocalSessionsBackup();
+    const localSessions = mergeSessionsByFingerprint(
+        readLocalSessionsNormalized(),
+        backupSessions,
+        readQueuedSessionSavesNormalized()
+    );
     if (!localSessions.length) return cloudSessions;
 
     const cloudFingerprints = new Set(cloudSessions.map(getSessionFingerprint).filter(Boolean));
@@ -218,6 +270,7 @@ async function migrateLocalSessionsToCloud(email, cloudSessions) {
         if (migratedCount === 0) return cloudSessions;
 
         const refreshedCloud = await fetchCloudSessions(email);
+        preserveLocalSessionsBackup();
         localStorage.setItem('savedSessions', JSON.stringify(refreshedCloud));
         window.dispatchEvent(new CustomEvent('sessions:synced', {
             detail: { migrated: migratedCount }
@@ -251,10 +304,11 @@ async function saveSessions(session) {
     try {
         const response = await fetch('/.netlify/functions/save-session', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: getInviteHeaders({ 'Content-Type': 'application/json' }),
             body: JSON.stringify({
                 email: user.email,
                 sessionName: session.name,
+                sessionDate: session.date,
                 shots: session.data
             })
         });
@@ -313,10 +367,12 @@ async function loadSessions() {
     
     try {
         const email = String(user.email).trim().toLowerCase();
+        preserveLocalSessionsBackup();
         const cloudSessions = await fetchCloudSessions(email);
         const sessions = await migrateLocalSessionsToCloud(email, cloudSessions);
 
         // Logged-in display is cloud-authoritative so devices match.
+        preserveLocalSessionsBackup();
         localStorage.setItem('savedSessions', JSON.stringify(sessions));
         
         return sessions;

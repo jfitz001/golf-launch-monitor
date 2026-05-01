@@ -44,7 +44,9 @@ export default async (req, context) => {
   }
 
   try {
-    const { email, sessions } = await req.json();
+    const body = await req.json();
+    const email = body.email || body.userEmail;
+    const sessions = body.sessions;
 
     if (!email || !sessions || !Array.isArray(sessions)) {
       return new Response(JSON.stringify({ error: 'Email and sessions array required' }), {
@@ -82,6 +84,8 @@ export default async (req, context) => {
 
     let migrated = 0;
     let failed = 0;
+    let skipped = 0;
+    const errors = [];
     let availableColumns = new Set();
     try {
       availableColumns = await getGolfSessionColumns();
@@ -89,16 +93,52 @@ export default async (req, context) => {
       availableColumns = new Set();
     }
 
+    const existingRes = await fetch(
+      `${supabaseUrl}/rest/v1/golf_sessions?select=session_name,shot_count,shot_data&user_id=eq.${encodeURIComponent(userId)}`,
+      {
+        method: 'GET',
+        headers: {
+          'apikey': serviceKey,
+          'Authorization': `Bearer ${serviceKey}`
+        }
+      }
+    );
+    const existingSessions = existingRes.ok ? await existingRes.json() : [];
+    const fingerprint = (name, shots) => {
+      const data = Array.isArray(shots) ? shots : [];
+      const first = data[0] || {};
+      const last = data[data.length - 1] || {};
+      return [
+        String(name || '').trim().toLowerCase(),
+        data.length,
+        first.Date || first.date || '',
+        first['Club Speed'] || '',
+        first['Carry Distance'] || '',
+        last.Date || last.date || '',
+        last['Club Speed'] || '',
+        last['Carry Distance'] || ''
+      ].join('|');
+    };
+    const existingFingerprints = new Set((Array.isArray(existingSessions) ? existingSessions : []).map((session) => (
+      fingerprint(session.session_name, session.shot_data)
+    )));
+
     for (const session of sessions) {
       try {
         const shots = session.data || [];
         const shotCount = shots.length;
+        const sessionName = session.name || `Session ${new Date(session.date).toLocaleDateString()}`;
+        const sessionFingerprint = fingerprint(sessionName, shots);
+        if (existingFingerprints.has(sessionFingerprint)) {
+          skipped++;
+          continue;
+        }
         const avgCarry = shots.reduce((sum, s) => sum + (parseFloat(s['Carry Distance'] || s['Carry Dist.'] || 0)), 0) / shotCount || 0;
         const avgClubSpeed = shots.reduce((sum, s) => sum + (parseFloat(s['Club Speed'] || 0)), 0) / shotCount || 0;
 
         const payload = {
           user_id: userId,
-          session_name: session.name || `Session ${new Date(session.date).toLocaleDateString()}`,
+          session_name: sessionName,
           shot_data: shots,
           shot_count: shotCount
         };
@@ -123,13 +163,27 @@ export default async (req, context) => {
           body: JSON.stringify(payload)
         });
         if (!insertRes.ok) throw new Error(await insertRes.text());
+        existingFingerprints.add(sessionFingerprint);
         migrated++;
       } catch (e) {
         failed++;
+        errors.push({
+          session: session?.name || 'Unknown session',
+          error: e.message
+        });
       }
     }
 
-    return new Response(JSON.stringify({ success: true, migrated, failed }), {
+    const results = {
+      total: sessions.length,
+      successful: migrated,
+      migrated,
+      skipped,
+      failed,
+      errors
+    };
+
+    return new Response(JSON.stringify({ success: true, migrated, skipped, failed, errors, results }), {
       status: 200,
       headers: { 'Content-Type': 'application/json' }
     });

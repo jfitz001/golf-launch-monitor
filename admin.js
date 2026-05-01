@@ -3,7 +3,7 @@ const ADMIN_DASHBOARD_EMAIL = 'jamiefitzgerald001@gmail.com';
 
 // Check if user is admin
 function checkAdminAccess() {
-    const user = netlifyIdentity.currentUser();
+    const user = window.netlifyIdentity.currentUser();
     
     if (!user) {
         document.getElementById('auth-section').style.display = 'flex';
@@ -31,11 +31,11 @@ function initAdmin() {
 }
 
 // Wait for Netlify Identity to be ready
-if (typeof netlifyIdentity !== 'undefined') {
-    netlifyIdentity.on('init', user => {
+if (typeof window.netlifyIdentity !== 'undefined') {
+    window.netlifyIdentity.on('init', user => {
         if (user) initAdmin();
     });
-    netlifyIdentity.on('login', user => {
+    window.netlifyIdentity.on('login', user => {
         initAdmin();
     });
 }
@@ -118,7 +118,7 @@ async function loadAdminData() {
         }
         
         // Fetch usage stats (API tracking)
-        const user = netlifyIdentity.currentUser();
+        const user = window.netlifyIdentity.currentUser();
         const token = user ? await user.jwt() : null;
         
         const response = await fetch('/.netlify/functions/get-usage-stats', {
@@ -205,7 +205,7 @@ async function loadUserList() {
         tbody.innerHTML = '<tr><td colspan="4" class="empty-log">Loading users...</td></tr>';
         
         // Fetch users from backend
-        const currentUser = netlifyIdentity?.currentUser();
+        const currentUser = window.netlifyIdentity?.currentUser();
         if (!currentUser) {
             tbody.innerHTML = '<tr><td colspan="4" class="empty-log">Not authenticated</td></tr>';
             return;
@@ -297,7 +297,7 @@ async function loadUserList() {
 }
 
 async function loadRateLimitConfig() {
-    const currentUser = netlifyIdentity?.currentUser();
+    const currentUser = window.netlifyIdentity?.currentUser();
     if (!currentUser) return;
 
     const response = await fetch(`/.netlify/functions/get-rate-limits?admin=${encodeURIComponent(currentUser.email)}`, {
@@ -321,7 +321,7 @@ async function loadRateLimitConfig() {
 
 // Save rate limits
 document.getElementById('save-rate-limits').addEventListener('click', async () => {
-    const currentUser = netlifyIdentity?.currentUser();
+    const currentUser = window.netlifyIdentity?.currentUser();
     if (!currentUser) return;
 
     const rateLimits = {
@@ -353,7 +353,7 @@ document.getElementById('save-rate-limits').addEventListener('click', async () =
 // Track API call (call this from app.js when making API requests)
 async function trackApiCall(endpoint, status, responseTime) {
     try {
-        const user = netlifyIdentity?.currentUser();
+        const user = window.netlifyIdentity?.currentUser();
         const callData = {
             timestamp: new Date().toISOString(),
             user: user ? user.email : 'anonymous',
@@ -394,7 +394,7 @@ async function trackApiCall(endpoint, status, responseTime) {
 // Check rate limit with backend
 async function checkRateLimit(endpoint = 'app-action') {
     try {
-        const user = netlifyIdentity?.currentUser();
+        const user = window.netlifyIdentity?.currentUser();
         const userEmail = user ? user.email : '';
         
         const response = await fetch('/.netlify/functions/check-rate-limit', {
@@ -454,7 +454,7 @@ async function setUserRateExempt(email, rateLimitExempt) {
 }
 
 async function updateUserAccess(email, updates) {
-    const currentUser = netlifyIdentity?.currentUser();
+    const currentUser = window.netlifyIdentity?.currentUser();
     if (!currentUser) return;
 
     const action = updates.blocked === true ? 'block' : updates.blocked === false ? 'unblock' : 'update';
@@ -482,7 +482,7 @@ async function updateUserAccess(email, updates) {
 }
 
 async function addUserByEmail() {
-    const currentUser = netlifyIdentity?.currentUser();
+    const currentUser = window.netlifyIdentity?.currentUser();
     if (!currentUser) return;
 
     const email = prompt('Enter user email to add/sync (e.g., david@example.com)');
@@ -515,8 +515,40 @@ document.getElementById('migrate-data-btn')?.addEventListener('click', async () 
     const resultsDiv = document.getElementById('migration-results');
     const reportDiv = document.getElementById('migration-report');
     
-    // Get localStorage sessions
-    const localSessions = JSON.parse(localStorage.getItem('savedSessions') || '[]');
+    // Get all local recoverable sessions: visible cache, backup cache, and queued cloud saves.
+    const parseArray = (key) => {
+        try {
+            const parsed = JSON.parse(localStorage.getItem(key) || '[]');
+            return Array.isArray(parsed) ? parsed : [];
+        } catch (error) {
+            return [];
+        }
+    };
+    const queuedSessions = parseArray('syncQueue')
+        .filter(item => item?.type === 'save-session' && Array.isArray(item?.data?.shots))
+        .map((item, index) => ({
+            id: item.id || item.timestamp || `queued-${index}`,
+            name: item.data.sessionName || 'Queued Session',
+            date: item.data.sessionDate || new Date(item.timestamp || Date.now()).toISOString(),
+            data: item.data.shots,
+            shotCount: item.data.shots.length
+        }));
+    const byKey = new Map();
+    [...parseArray('savedSessionsBackup'), ...parseArray('savedSessions'), ...queuedSessions].forEach((session) => {
+        const shots = Array.isArray(session?.data) ? session.data : [];
+        const first = shots[0] || {};
+        const last = shots[shots.length - 1] || {};
+        const key = [
+            session?.name || session?.session_name || '',
+            shots.length,
+            first?.Date || first?.date || '',
+            first?.['Club Speed'] || '',
+            last?.Date || last?.date || '',
+            last?.['Club Speed'] || ''
+        ].join('|');
+        if (shots.length > 0) byKey.set(key, { ...session, data: shots, shotCount: shots.length });
+    });
+    const localSessions = Array.from(byKey.values());
     
     if (localSessions.length === 0) {
         status.textContent = 'No sessions found in localStorage to migrate.';
@@ -528,7 +560,7 @@ document.getElementById('migrate-data-btn')?.addEventListener('click', async () 
         return;
     }
     
-    const user = netlifyIdentity?.currentUser();
+    const user = window.netlifyIdentity?.currentUser();
     if (!user) {
         alert('You must be logged in to migrate data');
         return;
@@ -548,8 +580,8 @@ document.getElementById('migrate-data-btn')?.addEventListener('click', async () 
                 'Content-Type': 'application/json'
             },
             body: JSON.stringify({
-                sessions: localSessions,
-                userEmail: user.email
+                email: user.email,
+                sessions: localSessions
             })
         });
         
@@ -566,27 +598,34 @@ document.getElementById('migrate-data-btn')?.addEventListener('click', async () 
         status.textContent = '';
         resultsDiv.style.display = 'block';
         
+        const stats = result.results || {
+            total: localSessions.length,
+            successful: Number(result.migrated || 0),
+            failed: Number(result.failed || 0),
+            errors: Array.isArray(result.errors) ? result.errors : []
+        };
+
         let reportHTML = `
             <div style="background: var(--bg); padding: 16px; border-radius: 8px; margin-top: 12px;">
                 <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-bottom: 16px;">
                     <div>
                         <div style="color: var(--text-secondary); font-size: 0.875rem;">Total</div>
-                        <div style="font-size: 1.5rem; font-weight: bold;">${result.results.total}</div>
+                        <div style="font-size: 1.5rem; font-weight: bold;">${stats.total}</div>
                     </div>
                     <div>
                         <div style="color: var(--text-secondary); font-size: 0.875rem;">Successful</div>
-                        <div style="font-size: 1.5rem; font-weight: bold; color: var(--success);">${result.results.successful}</div>
+                        <div style="font-size: 1.5rem; font-weight: bold; color: var(--success);">${stats.successful}</div>
                     </div>
                     <div>
                         <div style="color: var(--text-secondary); font-size: 0.875rem;">Failed</div>
-                        <div style="font-size: 1.5rem; font-weight: bold; color: var(--danger);">${result.results.failed}</div>
+                        <div style="font-size: 1.5rem; font-weight: bold; color: var(--danger);">${stats.failed}</div>
                     </div>
                 </div>
         `;
         
-        if (result.results.errors.length > 0) {
+        if (stats.errors.length > 0) {
             reportHTML += '<h4 style="margin-top: 16px;">Errors:</h4><ul style="margin: 8px 0;">';
-            result.results.errors.forEach(error => {
+            stats.errors.forEach(error => {
                 reportHTML += `<li style="color: var(--danger); margin: 4px 0;">${error.session}: ${error.error}</li>`;
             });
             reportHTML += '</ul>';
@@ -595,8 +634,8 @@ document.getElementById('migrate-data-btn')?.addEventListener('click', async () 
         reportHTML += '</div>';
         reportDiv.innerHTML = reportHTML;
         
-        if (result.results.successful > 0) {
-            alert(`Migration complete! ${result.results.successful} sessions migrated successfully.`);
+        if (stats.successful > 0) {
+            alert(`Migration complete! ${stats.successful} sessions migrated successfully.`);
         }
     } catch (error) {
         console.error('Migration error:', error);

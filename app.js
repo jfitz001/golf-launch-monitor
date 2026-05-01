@@ -382,10 +382,6 @@ async function saveUploadedSessionToCloud(files, shots, uploadMode) {
         : { id: null, name: null };
     const replacingLoadedSession = uploadMode === 'append' && loadedMeta?.id;
 
-    if (replacingLoadedSession && typeof window.deleteSessionSilently === 'function') {
-        await window.deleteSessionSilently(loadedMeta.id);
-    }
-
     const session = {
         id: Date.now(),
         name: getUploadSessionName(files, shots, uploadMode),
@@ -397,6 +393,9 @@ async function saveUploadedSessionToCloud(files, shots, uploadMode) {
     const result = await window.saveSessions(session);
     if (result?.success) {
         const savedId = String(result?.savedSession?.id || session.id);
+        if (!result.offline && replacingLoadedSession && String(loadedMeta.id) !== savedId && typeof window.deleteSessionSilently === 'function') {
+            await window.deleteSessionSilently(loadedMeta.id);
+        }
         if (typeof window.setLoadedSessionId === 'function') {
             window.setLoadedSessionId(savedId);
         }
