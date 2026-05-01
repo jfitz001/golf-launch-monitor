@@ -1261,6 +1261,25 @@ function getClubColor(club) {
     return CLUB_COLORS[club] || '#64748b';
 }
 
+function readNumericField(row, fields) {
+    for (const field of fields) {
+        const value = parseFloat(row?.[field]);
+        if (Number.isFinite(value)) return value;
+    }
+    return NaN;
+}
+
+function getFacePathOfflinePoint(row) {
+    const face = readNumericField(row, ['Club Face', 'ClubFace', 'Club Face Angle']);
+    const path = readNumericField(row, ['Club Path', 'ClubPath']);
+    const directF2P = readNumericField(row, ['Face to Path', 'Face-to-Path', 'Face To Path', 'Face Path']);
+    const offline = readNumericField(row, ['Carry Deviation Distance', 'Total Deviation Distance']);
+    const f2p = Number.isFinite(face) && Number.isFinite(path) ? face - path : directF2P;
+
+    if (!Number.isFinite(f2p) || !Number.isFinite(offline)) return null;
+    return { x: f2p, y: offline };
+}
+
 function getFacePathVisibilityState() {
     try {
         const saved = localStorage.getItem('facePathClubVisibility');
@@ -1288,11 +1307,8 @@ function renderAllClubsFacePathChart(canvasId, legendId, allShots) {
         .map(club => ({
             club,
             points: clubGroups[club].map(s => {
-                const path = parseFloat(s['Club Path']);
-                const face = parseFloat(s['Club Face']);
-                const offline = parseFloat(s['Carry Deviation Distance']);
-                return { x: face - path, y: offline };
-            }).filter(d => Number.isFinite(d.x) && Number.isFinite(d.y))
+                return getFacePathOfflinePoint(s);
+            }).filter(Boolean)
         }))
         .filter(item => item.points.length > 0);
 

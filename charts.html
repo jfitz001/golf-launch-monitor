@@ -183,6 +183,24 @@
         function getClubName(shot) {
             return shot['Club Name'] || shot['Club Type'] || shot['Club'] || shot['club'] || 'Unknown';
         }
+
+        function readNumericField(row, fields) {
+            for (const field of fields) {
+                const value = parseFloat(row?.[field]);
+                if (Number.isFinite(value)) return value;
+            }
+            return NaN;
+        }
+
+        function getFacePathOfflinePoint(row) {
+            const face = readNumericField(row, ['Club Face', 'ClubFace', 'Club Face Angle']);
+            const path = readNumericField(row, ['Club Path', 'ClubPath']);
+            const directF2P = readNumericField(row, ['Face to Path', 'Face-to-Path', 'Face To Path', 'Face Path']);
+            const offline = readNumericField(row, ['Carry Deviation Distance', 'Total Deviation Distance']);
+            const f2p = Number.isFinite(face) && Number.isFinite(path) ? face - path : directF2P;
+            if (!Number.isFinite(f2p) || !Number.isFinite(offline)) return null;
+            return { f2p, offline, absOffline: Math.abs(offline), club: getClubName(row) };
+        }
         
         function getFilteredData() {
             if (currentClubFilter === 'all') return allGolfData;
@@ -309,14 +327,7 @@
             }
 
             const valid = shots
-                .map((shot) => {
-                    const face = parseFloat(shot['Club Face']);
-                    const path = parseFloat(shot['Club Path']);
-                    const offline = parseFloat(shot['Carry Deviation Distance']);
-                    if (!Number.isFinite(face) || !Number.isFinite(path) || !Number.isFinite(offline)) return null;
-                    const f2p = face - path;
-                    return { f2p, offline, absOffline: Math.abs(offline), club: getClubName(shot) };
-                })
+                .map(getFacePathOfflinePoint)
                 .filter(Boolean);
 
             if (!valid.length) {
@@ -389,13 +400,7 @@
             }
 
             const valid = shots
-                .map((shot) => {
-                    const face = parseFloat(shot['Club Face']);
-                    const path = parseFloat(shot['Club Path']);
-                    const offline = parseFloat(shot['Carry Deviation Distance']);
-                    if (!Number.isFinite(face) || !Number.isFinite(path) || !Number.isFinite(offline)) return null;
-                    return { f2p: face - path, offline, absOffline: Math.abs(offline), club: getClubName(shot) };
-                })
+                .map(getFacePathOfflinePoint)
                 .filter(Boolean);
 
             if (!valid.length) {
