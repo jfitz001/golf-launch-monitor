@@ -36,6 +36,7 @@ function loadCurrentShotsFromStorage() {
 }
 
 const ACTIVE_SESSION_STORAGE_KEY = 'activeSessionId';
+const SESSION_MIGRATION_LOCK_KEY = 'sessionMigrationInFlight';
 
 function setCurrentSessionId(nextId) {
     const normalized = (nextId === null || nextId === undefined || nextId === '')
@@ -123,6 +124,110 @@ function mergeSessions(cloudSessions = [], localSessions = []) {
     return Array.from(merged.values()).sort((a, b) => new Date(b.date || 0) - new Date(a.date || 0));
 }
 
+function getSessionFingerprint(session) {
+    const normalized = normalizeSessionRecord(session);
+    if (!normalized) return '';
+    const shots = normalized.data || [];
+    const firstShot = shots[0] || {};
+    const lastShot = shots[shots.length - 1] || {};
+    const stableShotBits = (shot) => [
+        getShotClubName(shot),
+        shot?.Date || shot?.date || '',
+        shot?.['Club Speed'] || '',
+        shot?.['Carry Distance'] || '',
+        shot?.['Carry Deviation Distance'] || ''
+    ].join(':');
+
+    return [
+        normalized.name.toLowerCase(),
+        normalized.shotCount,
+        stableShotBits(firstShot),
+        stableShotBits(lastShot)
+    ].join('|');
+}
+
+async function fetchCloudSessions(email) {
+    const response = await fetch(`/.netlify/functions/get-sessions?email=${encodeURIComponent(email)}`, {
+        headers: getInviteHeaders(),
+        cache: 'no-store'
+    });
+
+    if (!response.ok) {
+        throw new Error('Failed to load sessions');
+    }
+
+    const result = await response.json();
+    const sessionsRaw = Array.isArray(result) ? result : (result.sessions || []);
+    return sessionsRaw
+        .map((session, index) => normalizeSessionRecord(session, index))
+        .filter(Boolean);
+}
+
+async function saveSessionToCloud(email, session) {
+    const normalized = normalizeSessionRecord(session);
+    if (!normalized || !normalized.data.length) return null;
+
+    const response = await fetch('/.netlify/functions/save-session', {
+        method: 'POST',
+        headers: getInviteHeaders({ 'Content-Type': 'application/json' }),
+        body: JSON.stringify({
+            email,
+            sessionName: normalized.name,
+            sessionDate: normalized.date,
+            shots: normalized.data
+        })
+    });
+
+    if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`Failed to migrate session: ${response.status} - ${errorText}`);
+    }
+
+    const result = await response.json();
+    return normalizeSessionRecord(result?.session || normalized);
+}
+
+async function migrateLocalSessionsToCloud(email, cloudSessions) {
+    if (!email || localStorage.getItem(SESSION_MIGRATION_LOCK_KEY) === '1') {
+        return cloudSessions;
+    }
+
+    const localSessions = readLocalSessionsNormalized();
+    if (!localSessions.length) return cloudSessions;
+
+    const cloudFingerprints = new Set(cloudSessions.map(getSessionFingerprint).filter(Boolean));
+    const missingLocalSessions = localSessions.filter((session) => {
+        const fingerprint = getSessionFingerprint(session);
+        return fingerprint && !cloudFingerprints.has(fingerprint);
+    });
+
+    if (!missingLocalSessions.length) return cloudSessions;
+
+    localStorage.setItem(SESSION_MIGRATION_LOCK_KEY, '1');
+    try {
+        let migratedCount = 0;
+        for (const session of missingLocalSessions) {
+            try {
+                await saveSessionToCloud(email, session);
+                migratedCount++;
+            } catch (error) {
+                console.warn('Could not migrate local session to cloud:', error);
+            }
+        }
+
+        if (migratedCount === 0) return cloudSessions;
+
+        const refreshedCloud = await fetchCloudSessions(email);
+        localStorage.setItem('savedSessions', JSON.stringify(refreshedCloud));
+        window.dispatchEvent(new CustomEvent('sessions:synced', {
+            detail: { migrated: migratedCount }
+        }));
+        return refreshedCloud;
+    } finally {
+        localStorage.removeItem(SESSION_MIGRATION_LOCK_KEY);
+    }
+}
+
 function upsertLocalSessionCache(session) {
     const normalized = normalizeSessionRecord(session);
     if (!normalized) return;
@@ -133,7 +238,7 @@ function upsertLocalSessionCache(session) {
 
 // Save sessions to Supabase (with localStorage fallback)
 async function saveSessions(session) {
-    const user = netlifyIdentity?.currentUser();
+    const user = window.netlifyIdentity?.currentUser();
     
     if (!user) {
         console.warn('No user logged in, saving to localStorage only');
@@ -177,13 +282,25 @@ async function saveSessions(session) {
         }
         
         upsertLocalSessionCache(session);
+        const email = user?.email;
+        if (email && window.syncService?.addToQueue) {
+            window.syncService.addToQueue({
+                type: 'save-session',
+                data: {
+                    email,
+                    sessionName: session.name,
+                    sessionDate: session.date,
+                    shots: session.data
+                }
+            });
+        }
         return { success: true, offline: true, error: error.message };
     }
 }
 
 // Load sessions from Supabase (with localStorage fallback)
 async function loadSessions() {
-    const user = netlifyIdentity?.currentUser();
+    const user = window.netlifyIdentity?.currentUser();
     
     if (!user) {
         // Not logged in, return localStorage only
@@ -195,25 +312,11 @@ async function loadSessions() {
     }
     
     try {
-        const response = await fetch(`/.netlify/functions/get-sessions?email=${encodeURIComponent(user.email)}`, {
-            headers: getInviteHeaders()
-        });
-        
-        if (!response.ok) {
-            throw new Error('Failed to load sessions');
-        }
-        
-        const result = await response.json();
-        
-        const localSessions = readLocalSessionsNormalized();
-        // Support both shapes: [] and { sessions: [] }
-        const sessionsRaw = Array.isArray(result) ? result : (result.sessions || []);
-        const cloudSessions = sessionsRaw
-            .map((session, index) => normalizeSessionRecord(session, index))
-            .filter(Boolean);
-        const sessions = mergeSessions(cloudSessions, localSessions);
-        
-        // Update localStorage cache
+        const email = String(user.email).trim().toLowerCase();
+        const cloudSessions = await fetchCloudSessions(email);
+        const sessions = await migrateLocalSessionsToCloud(email, cloudSessions);
+
+        // Logged-in display is cloud-authoritative so devices match.
         localStorage.setItem('savedSessions', JSON.stringify(sessions));
         
         return sessions;
@@ -324,8 +427,13 @@ async function saveCurrentSession() {
 
 async function deleteSessionById(sessionId) {
     if (!confirm('Delete this session?')) return;
+    await deleteSessionSilently(sessionId);
+}
+
+async function deleteSessionSilently(sessionId) {
+    if (!sessionId) return;
     
-    const user = netlifyIdentity?.currentUser();
+    const user = window.netlifyIdentity?.currentUser();
     
     if (user) {
         try {
@@ -334,6 +442,7 @@ async function deleteSessionById(sessionId) {
                 headers: getInviteHeaders({ 'Content-Type': 'application/json' }),
                 body: JSON.stringify({
                     sessionId,
+                    email: user.email,
                     userEmail: user.email
                 })
             });
@@ -481,7 +590,7 @@ async function calculateSwingScoreFromAllSessions() {
     
     // Also try to load from Supabase if available
     try {
-        const user = netlifyIdentity?.currentUser();
+        const user = window.netlifyIdentity?.currentUser();
         if (user) {
             const response = await fetch(`/.netlify/functions/get-sessions?email=${encodeURIComponent(user.email)}`);
             if (response.ok) {
@@ -769,6 +878,8 @@ document.addEventListener('click', (e) => {
 window.updateClubSidebar = (shots) => {
     renderSidebarClubUsage(Array.isArray(shots) ? shots : loadCurrentShotsFromStorage());
 };
+window.saveSessions = saveSessions;
+window.deleteSessionSilently = deleteSessionSilently;
 window.setLoadedSessionId = setCurrentSessionId;
 window.getLoadedSessionId = getCurrentSessionId;
 window.getLoadedSessionMeta = getLoadedSessionMeta;

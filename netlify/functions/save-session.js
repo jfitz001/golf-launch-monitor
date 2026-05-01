@@ -60,7 +60,7 @@ export default async (req, context) => {
   }
 
   try {
-    const { email, sessionName, shots } = await req.json();
+    const { email, sessionName, sessionDate, shots } = await req.json();
 
     if (!email || !Array.isArray(shots)) {
       return new Response(JSON.stringify({ error: 'Email and shots required' }), {
@@ -110,6 +110,8 @@ export default async (req, context) => {
       shot_count: shotCount
     };
 
+    const parsedSessionDate = sessionDate ? new Date(sessionDate) : null;
+
     try {
       const availableColumns = await getGolfSessionColumns();
       if (availableColumns.has('avg_carry')) {
@@ -117,6 +119,9 @@ export default async (req, context) => {
       }
       if (availableColumns.has('avg_club_speed')) {
         payload.avg_club_speed = Math.round(avgClubSpeed * 10) / 10;
+      }
+      if (availableColumns.has('created_at') && parsedSessionDate && !Number.isNaN(parsedSessionDate.getTime())) {
+        payload.created_at = parsedSessionDate.toISOString();
       }
     } catch (e) {
       // Ignore optional column detection failures; core payload still valid.

@@ -48,6 +48,10 @@ function showApp(user) {
     if (typeof updateSwingScore === 'function') {
         setTimeout(updateSwingScore, 100);
     }
+
+    window.dispatchEvent(new CustomEvent('auth:ready', {
+        detail: { email: user.email }
+    }));
 }
 
 function showAuth() {

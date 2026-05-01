@@ -13,7 +13,7 @@ function setGolfData(nextData) {
 window.setGolfData = setGolfData;
 
 async function checkUserRateLimit(endpoint = 'app-action') {
-    const currentUser = netlifyIdentity?.currentUser();
+    const currentUser = window.netlifyIdentity?.currentUser();
     if (!currentUser || !currentUser.email) {
         return false;
     }
@@ -54,7 +54,7 @@ function getInviteHeaders(baseHeaders = {}) {
 }
 
 function getCurrentUserEmail() {
-    const currentUser = netlifyIdentity?.currentUser?.();
+    const currentUser = window.netlifyIdentity?.currentUser?.();
     return currentUser?.email ? String(currentUser.email).trim().toLowerCase() : '';
 }
 
@@ -127,16 +127,75 @@ async function upsertWorkingDataToCloud(workingData, options = {}) {
 window.fetchWorkingDataFromCloud = fetchWorkingDataFromCloud;
 window.upsertWorkingDataToCloud = upsertWorkingDataToCloud;
 
+function hasPendingWorkingDataSync() {
+    try {
+        const queue = JSON.parse(localStorage.getItem('syncQueue') || '[]');
+        return Array.isArray(queue) && queue.some((item) => item?.type === 'upsert-working-data');
+    } catch (error) {
+        return false;
+    }
+}
+
+function applyWorkingData(shots, summaryText = '') {
+    const nextShots = Array.isArray(shots) ? shots : [];
+    golfData = nextShots;
+    window.golfData = nextShots;
+    localStorage.setItem('currentGolfData', JSON.stringify(nextShots));
+    localStorage.setItem('golfData', JSON.stringify(nextShots));
+    localStorage.setItem('lastUploadTime', Date.now().toString());
+
+    const dataLoaded = document.getElementById('dataLoaded');
+    const noData = document.getElementById('noData');
+    if (dataLoaded) dataLoaded.classList.remove('hidden');
+    if (noData) noData.style.display = 'none';
+
+    const summary = document.getElementById('uploadSummary');
+    if (summary && summaryText) summary.textContent = summaryText;
+
+    if (typeof displayData === 'function') {
+        displayData();
+    }
+
+    if (document.getElementById('drills') && typeof analyzeGolfData === 'function') {
+        const insights = analyzeGolfData(golfData);
+        void updateDrills(insights, { aiFirst: true });
+    }
+}
+
+async function hydrateWorkingDataFromCloud() {
+    if (hasPendingWorkingDataSync()) {
+        return false;
+    }
+
+    const cloudData = await fetchWorkingDataFromCloud();
+    if (cloudData?.success && cloudData?.hasData && Array.isArray(cloudData.workingData) && cloudData.workingData.length > 0) {
+        applyWorkingData(cloudData.workingData, `Loaded ${cloudData.workingData.length} cloud-synced shots`);
+        return true;
+    }
+
+    return false;
+}
+
 // Check if user is admin and show admin link
 window.addEventListener('load', async () => {
-    const user = netlifyIdentity?.currentUser();
+    const user = window.netlifyIdentity?.currentUser();
     if (user && user.email === 'jamiefitzgerald001@gmail.com') {
         const adminLink = document.getElementById('admin-link');
         if (adminLink) adminLink.style.display = 'inline-block';
     }
 
-    const existingShots = loadStoredShots();
     const summary = document.getElementById('uploadSummary');
+    const pendingWorkingSync = hasPendingWorkingDataSync();
+
+    if (!pendingWorkingSync) {
+        try {
+            if (await hydrateWorkingDataFromCloud()) return;
+        } catch (error) {
+            console.warn('Cloud working data load skipped:', error.message || error);
+        }
+    }
+
+    const existingShots = loadStoredShots();
     if (summary && existingShots.length > 0) {
         const loadedMeta = typeof window.getLoadedSessionMeta === 'function'
             ? window.getLoadedSessionMeta()
@@ -144,38 +203,13 @@ window.addEventListener('load', async () => {
         const loadedLabel = loadedMeta?.name ? `Loaded session: ${loadedMeta.name}. ` : '';
         summary.textContent = `${loadedLabel}${existingShots.length} shots loaded in working set. Upload CSV to add or start new session.`;
     }
+});
 
-    if (existingShots.length === 0) {
-        try {
-            const cloudData = await fetchWorkingDataFromCloud();
-            if (cloudData?.success && cloudData?.hasData && Array.isArray(cloudData.workingData) && cloudData.workingData.length > 0) {
-                golfData = cloudData.workingData;
-                window.golfData = cloudData.workingData;
-                localStorage.setItem('currentGolfData', JSON.stringify(cloudData.workingData));
-                localStorage.setItem('golfData', JSON.stringify(cloudData.workingData));
-                localStorage.setItem('lastUploadTime', Date.now().toString());
-
-                const dataLoaded = document.getElementById('dataLoaded');
-                const noData = document.getElementById('noData');
-                if (dataLoaded) dataLoaded.classList.remove('hidden');
-                if (noData) noData.style.display = 'none';
-
-                if (summary) {
-                    summary.textContent = `Loaded ${cloudData.workingData.length} cloud-synced shots`;
-                }
-
-                if (typeof displayData === 'function') {
-                    displayData();
-                }
-
-                if (document.getElementById('drills') && typeof analyzeGolfData === 'function') {
-                    const insights = analyzeGolfData(golfData);
-                    void updateDrills(insights, { aiFirst: true });
-                }
-            }
-        } catch (error) {
-            console.warn('Cloud working data load skipped:', error.message || error);
-        }
+window.addEventListener('auth:ready', async () => {
+    try {
+        await hydrateWorkingDataFromCloud();
+    } catch (error) {
+        console.warn('Cloud working data refresh skipped:', error.message || error);
     }
 });
 
@@ -306,6 +340,77 @@ function updateUploadSummary(fileCount, newShotsCount, totalShotsCount, dedupedC
     summary.textContent = `${fileCount} file${fileCount === 1 ? '' : 's'} added • ${newShotsCount} new shots • ${totalShotsCount} total shots${dedupeText}`;
 }
 
+function getUploadedClubSummary(shots) {
+    const counts = {};
+    (Array.isArray(shots) ? shots : []).forEach((shot) => {
+        const club = shot?.['Club Name'] || shot?.['Club Type'] || shot?.Club || shot?.club || 'Golf';
+        counts[club] = (counts[club] || 0) + 1;
+    });
+
+    return Object.entries(counts)
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 3)
+        .map(([club]) => club)
+        .join(', ') || 'Golf';
+}
+
+function getUploadSessionName(files, shots, uploadMode) {
+    const loadedMeta = typeof window.getLoadedSessionMeta === 'function'
+        ? window.getLoadedSessionMeta()
+        : { id: null, name: null };
+
+    if (uploadMode === 'append' && loadedMeta?.name) {
+        return loadedMeta.name;
+    }
+
+    const fileNames = (Array.isArray(files) ? files : [])
+        .map((file) => String(file?.name || '').replace(/\.csv$/i, '').trim())
+        .filter(Boolean);
+    if (fileNames.length === 1) return fileNames[0];
+
+    const date = new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+    return `${getUploadedClubSummary(shots)} ${date}`;
+}
+
+async function saveUploadedSessionToCloud(files, shots, uploadMode) {
+    if (typeof window.saveSessions !== 'function' || !Array.isArray(shots) || shots.length === 0) {
+        return { success: false, reason: 'save-unavailable' };
+    }
+
+    const loadedMeta = typeof window.getLoadedSessionMeta === 'function'
+        ? window.getLoadedSessionMeta()
+        : { id: null, name: null };
+    const replacingLoadedSession = uploadMode === 'append' && loadedMeta?.id;
+
+    if (replacingLoadedSession && typeof window.deleteSessionSilently === 'function') {
+        await window.deleteSessionSilently(loadedMeta.id);
+    }
+
+    const session = {
+        id: Date.now(),
+        name: getUploadSessionName(files, shots, uploadMode),
+        date: new Date().toISOString(),
+        timestamp: Date.now(),
+        data: shots
+    };
+
+    const result = await window.saveSessions(session);
+    if (result?.success) {
+        const savedId = String(result?.savedSession?.id || session.id);
+        if (typeof window.setLoadedSessionId === 'function') {
+            window.setLoadedSessionId(savedId);
+        }
+        if (typeof window.updateSessionsList === 'function') {
+            await window.updateSessionsList();
+        }
+        window.dispatchEvent(new CustomEvent('sessions:changed', {
+            detail: { action: 'save', sessionId: savedId }
+        }));
+    }
+
+    return result;
+}
+
 async function processFiles(files) {
     const validFiles = files.filter(file => file.name.toLowerCase().endsWith('.csv'));
     if (validFiles.length === 0) return;
@@ -333,18 +438,15 @@ async function processFiles(files) {
         localStorage.setItem('lastUploadTime', Date.now().toString());
 
         const cloudResult = await upsertWorkingDataToCloud(mergedShots, { queueIfOffline: true });
+        const sessionSaveResult = await saveUploadedSessionToCloud(validFiles, mergedShots, uploadMode);
         const dedupedCount = Number(mergeResult?.dedupedCount || 0);
         updateUploadSummary(validFiles.length, newShots.length, mergedShots.length, dedupedCount);
 
-        if (uploadMode === 'replace' && typeof window.setLoadedSessionId === 'function') {
-            window.setLoadedSessionId(null);
-            if (typeof window.updateSessionsList === 'function') {
-                await window.updateSessionsList();
-            }
-        }
-
         if (cloudResult?.queued) {
             console.warn('Working data sync queued:', cloudResult.error || 'retry later');
+        }
+        if (sessionSaveResult?.offline) {
+            console.warn('Uploaded session queued/local until cloud is reachable:', sessionSaveResult.error || 'retry later');
         }
 
         if (typeof window.updateClubSidebar === 'function') {
@@ -1728,7 +1830,7 @@ function escapeHtml(value) {
 }
 
 async function buildTrainingAiSummary(recommendations, trendContext) {
-    const currentUser = netlifyIdentity?.currentUser?.();
+    const currentUser = window.netlifyIdentity?.currentUser?.();
     if (!currentUser?.email) return '';
 
     const allowed = await checkUserRateLimit('gemini-proxy');
@@ -1897,7 +1999,7 @@ function toggleDrill(drillId) {
 const generateInsightsBtn = document.getElementById('generateInsights');
 if (generateInsightsBtn) {
 generateInsightsBtn.addEventListener('click', async () => {
-    const currentUser = netlifyIdentity?.currentUser();
+    const currentUser = window.netlifyIdentity?.currentUser();
     if (!currentUser || !currentUser.email) {
         alert('Sign in required for AI analysis.');
         return;

@@ -33,6 +33,16 @@ export default async (req, context) => {
     return new Set(Object.keys(rows[0]));
   }
 
+  function extractRpcUserId(payload) {
+    if (!payload) return null;
+    if (typeof payload === 'string') return payload;
+    if (Array.isArray(payload)) return extractRpcUserId(payload[0]);
+    if (typeof payload === 'object') {
+      return payload.user_id || payload.id || payload.ensure_user_exists || null;
+    }
+    return null;
+  }
+
   try {
     const { email, sessions } = await req.json();
 
@@ -54,7 +64,21 @@ export default async (req, context) => {
       body: JSON.stringify({ user_email: email, netlify_user_id: null })
     });
 
-    const userId = await userRes.json();
+    if (!userRes.ok) {
+      const userErrorText = await userRes.text();
+      return new Response(JSON.stringify({ error: `Failed to ensure user: ${userErrorText}` }), {
+        status: 500,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
+
+    const userId = extractRpcUserId(await userRes.json());
+    if (!userId) {
+      return new Response(JSON.stringify({ error: 'Could not resolve user id from ensure_user_exists response' }), {
+        status: 500,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
 
     let migrated = 0;
     let failed = 0;
@@ -84,8 +108,12 @@ export default async (req, context) => {
         if (availableColumns.has('avg_club_speed')) {
           payload.avg_club_speed = Math.round(avgClubSpeed * 10) / 10;
         }
+        const parsedSessionDate = session.date ? new Date(session.date) : null;
+        if (availableColumns.has('created_at') && parsedSessionDate && !Number.isNaN(parsedSessionDate.getTime())) {
+          payload.created_at = parsedSessionDate.toISOString();
+        }
 
-        await fetch(`${supabaseUrl}/rest/v1/golf_sessions`, {
+        const insertRes = await fetch(`${supabaseUrl}/rest/v1/golf_sessions`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -94,6 +122,7 @@ export default async (req, context) => {
           },
           body: JSON.stringify(payload)
         });
+        if (!insertRes.ok) throw new Error(await insertRes.text());
         migrated++;
       } catch (e) {
         failed++;
