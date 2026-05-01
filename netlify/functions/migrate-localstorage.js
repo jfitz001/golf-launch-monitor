@@ -33,6 +33,23 @@ export default async (req, context) => {
     return new Set(Object.keys(rows[0]));
   }
 
+  function columnExists(columns, column) {
+    const legacyColumns = new Set([
+      'id',
+      'user_id',
+      'club_type',
+      'shot_count',
+      'avg_carry',
+      'best_shot',
+      'consistency',
+      'swing_score',
+      'swing_grade',
+      'session_data',
+      'created_at'
+    ]);
+    return columns.size === 0 ? legacyColumns.has(column) : columns.has(column);
+  }
+
   function extractRpcUserId(payload) {
     if (!payload) return null;
     if (typeof payload === 'string') return payload;
@@ -94,7 +111,7 @@ export default async (req, context) => {
     }
 
     const existingRes = await fetch(
-      `${supabaseUrl}/rest/v1/golf_sessions?select=session_name,shot_count,shot_data&user_id=eq.${encodeURIComponent(userId)}`,
+      `${supabaseUrl}/rest/v1/golf_sessions?select=*&user_id=eq.${encodeURIComponent(userId)}`,
       {
         method: 'GET',
         headers: {
@@ -120,7 +137,7 @@ export default async (req, context) => {
       ].join('|');
     };
     const existingFingerprints = new Set((Array.isArray(existingSessions) ? existingSessions : []).map((session) => (
-      fingerprint(session.session_name, session.shot_data)
+      fingerprint(session.session_name || session.club_type, session.shot_data || session.session_data)
     )));
 
     for (const session of sessions) {
@@ -138,18 +155,30 @@ export default async (req, context) => {
 
         const payload = {
           user_id: userId,
-          session_name: sessionName,
-          shot_data: shots,
           shot_count: shotCount
         };
-        if (availableColumns.has('avg_carry')) {
+        if (columnExists(availableColumns, 'session_name')) {
+          payload.session_name = sessionName;
+        } else if (columnExists(availableColumns, 'club_type')) {
+          payload.club_type = sessionName;
+        }
+        if (columnExists(availableColumns, 'shot_data')) {
+          payload.shot_data = shots;
+        } else if (columnExists(availableColumns, 'session_data')) {
+          payload.session_data = shots;
+        }
+        if (columnExists(availableColumns, 'avg_carry')) {
           payload.avg_carry = Math.round(avgCarry * 10) / 10;
         }
-        if (availableColumns.has('avg_club_speed')) {
+        if (columnExists(availableColumns, 'avg_club_speed')) {
           payload.avg_club_speed = Math.round(avgClubSpeed * 10) / 10;
         }
+        if (columnExists(availableColumns, 'best_shot')) {
+          const carryDistances = shots.map(s => parseFloat(s['Carry Distance'] || s['Carry Dist.'] || 0)).filter(Number.isFinite);
+          payload.best_shot = carryDistances.length ? Math.max(...carryDistances) : null;
+        }
         const parsedSessionDate = session.date ? new Date(session.date) : null;
-        if (availableColumns.has('created_at') && parsedSessionDate && !Number.isNaN(parsedSessionDate.getTime())) {
+        if (columnExists(availableColumns, 'created_at') && parsedSessionDate && !Number.isNaN(parsedSessionDate.getTime())) {
           payload.created_at = parsedSessionDate.toISOString();
         }
 

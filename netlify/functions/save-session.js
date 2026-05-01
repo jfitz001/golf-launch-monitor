@@ -59,6 +59,25 @@ export default async (req, context) => {
     return new Set(Object.keys(rows[0]));
   }
 
+  function columnExists(columns, column) {
+    // If table has no rows, PostgREST cannot expose keys from sample row.
+    // Current production migration uses these legacy column names.
+    const legacyColumns = new Set([
+      'id',
+      'user_id',
+      'club_type',
+      'shot_count',
+      'avg_carry',
+      'best_shot',
+      'consistency',
+      'swing_score',
+      'swing_grade',
+      'session_data',
+      'created_at'
+    ]);
+    return columns.size === 0 ? legacyColumns.has(column) : columns.has(column);
+  }
+
   try {
     const { email, sessionName, sessionDate, shots } = await req.json();
 
@@ -102,29 +121,48 @@ export default async (req, context) => {
     const avgCarry = shots.reduce((sum, s) => sum + (parseFloat(s['Carry Distance'] || s['Carry Dist.'] || 0)), 0) / shotCount || 0;
     const avgClubSpeed = shots.reduce((sum, s) => sum + (parseFloat(s['Club Speed'] || 0)), 0) / shotCount || 0;
 
-    // Build payload using guaranteed columns, plus optional metrics if columns exist.
+    let availableColumns = new Set();
+    try {
+      availableColumns = await getGolfSessionColumns();
+    } catch (e) {
+      availableColumns = new Set();
+    }
+
+    // Build payload for either schema:
+    // legacy: club_type + session_data
+    // newer: session_name + shot_data
     const payload = {
       user_id: userId,
-      session_name: sessionName || `Session ${new Date().toLocaleDateString()}`,
-      shot_data: shots,
       shot_count: shotCount
     };
+    const safeSessionName = sessionName || `Session ${new Date().toLocaleDateString()}`;
+
+    if (columnExists(availableColumns, 'session_name')) {
+      payload.session_name = safeSessionName;
+    } else if (columnExists(availableColumns, 'club_type')) {
+      payload.club_type = safeSessionName;
+    }
+
+    if (columnExists(availableColumns, 'shot_data')) {
+      payload.shot_data = shots;
+    } else if (columnExists(availableColumns, 'session_data')) {
+      payload.session_data = shots;
+    }
 
     const parsedSessionDate = sessionDate ? new Date(sessionDate) : null;
 
-    try {
-      const availableColumns = await getGolfSessionColumns();
-      if (availableColumns.has('avg_carry')) {
-        payload.avg_carry = Math.round(avgCarry * 10) / 10;
-      }
-      if (availableColumns.has('avg_club_speed')) {
-        payload.avg_club_speed = Math.round(avgClubSpeed * 10) / 10;
-      }
-      if (availableColumns.has('created_at') && parsedSessionDate && !Number.isNaN(parsedSessionDate.getTime())) {
-        payload.created_at = parsedSessionDate.toISOString();
-      }
-    } catch (e) {
-      // Ignore optional column detection failures; core payload still valid.
+    if (columnExists(availableColumns, 'avg_carry')) {
+      payload.avg_carry = Math.round(avgCarry * 10) / 10;
+    }
+    if (columnExists(availableColumns, 'avg_club_speed')) {
+      payload.avg_club_speed = Math.round(avgClubSpeed * 10) / 10;
+    }
+    if (columnExists(availableColumns, 'best_shot')) {
+      const carryDistances = shots.map(s => parseFloat(s['Carry Distance'] || s['Carry Dist.'] || 0)).filter(Number.isFinite);
+      payload.best_shot = carryDistances.length ? Math.max(...carryDistances) : null;
+    }
+    if (columnExists(availableColumns, 'created_at') && parsedSessionDate && !Number.isNaN(parsedSessionDate.getTime())) {
+      payload.created_at = parsedSessionDate.toISOString();
     }
 
     // Insert session
