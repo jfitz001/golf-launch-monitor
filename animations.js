@@ -22,6 +22,7 @@
     document.querySelectorAll(
       '.stat-card, .chart-card, .quick-link-card, .drill-card, .session-item, .insights-section, .drills-section, .score-history-section, .global-filter-bar'
     ).forEach((el, i) => {
+      if (el.classList.contains('anim-visible')) return; // already animated
       el.style.setProperty('--anim-delay', `${i * 60}ms`);
       io.observe(el);
     });

@@ -479,6 +479,22 @@ function displayData() {
     const dataLoadedSection = document.getElementById('dataLoaded');
     if (dataLoadedSection) {
         dataLoadedSection.classList.remove('hidden');
+        // Re-register newly visible elements with the animation observer.
+        // Elements inside a display:none container aren't intersecting at init
+        // time, so they never received anim-visible. Observe them now that they
+        // are in the DOM and visible.
+        requestAnimationFrame(() => {
+            if (typeof window.reObserveAnimations === 'function') {
+                window.reObserveAnimations();
+            }
+            // Hard fallback: if IO still hasn't fired after 400 ms, force-show
+            // all sections so nothing stays invisible on slow/restricted browsers.
+            setTimeout(() => {
+                dataLoadedSection.querySelectorAll(
+                    '.stat-card, .chart-card, .quick-link-card, .score-history-section'
+                ).forEach(el => el.classList.add('anim-visible'));
+            }, 400);
+        });
     }
 
     if (typeof window.updateClubSidebar === 'function') {

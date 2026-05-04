@@ -797,11 +797,11 @@ async function updateSwingScore() {
         // Save to history and get delta
         const history = saveScoreToHistory(scoreData);
         const delta = getScoreDelta();
-        
+
         // Update display
         scoreEl.textContent = scoreData.score;
         descEl.textContent = `${scoreData.grade} - ${scoreData.desc}`;
-        
+
         // Show delta arrow
         if (deltaEl && delta !== null && delta !== 0) {
             deltaEl.style.display = 'inline-flex';
@@ -812,10 +812,21 @@ async function updateSwingScore() {
                 deltaEl.className = 'swing-score-delta negative';
                 deltaEl.innerHTML = `<span class="delta-arrow">↓</span><span class="delta-value">${delta}</span>`;
             }
+            // Pulse the score card so users notice the change on mobile
+            const container = document.getElementById('swingScoreContainer');
+            if (container) {
+                container.classList.remove('score-updated');
+                // Force reflow so the animation retriggers even if called twice
+                void container.offsetWidth;
+                container.classList.add('score-updated');
+                container.addEventListener('animationend', () => {
+                    container.classList.remove('score-updated');
+                }, { once: true });
+            }
         } else if (deltaEl) {
             deltaEl.style.display = 'none';
         }
-        
+
         // Update tooltip with breakdown
         if (tooltipEl && scoreData.breakdown) {
             const b = scoreData.breakdown;
@@ -828,10 +839,10 @@ async function updateSwingScore() {
                 <div class="tooltip-row positive"><span>Strength Bonus:</span><span>+${b.strengthBonus}</span></div>
                 <div class="tooltip-divider"></div>
                 <div class="tooltip-row total"><span>Final Score:</span><span>${scoreData.score}</span></div>
-                <div class="tooltip-footer">Based on ${b.totalShots} total shots</div>
+                <div class="tooltip-footer">Based on ${b.totalShots} total shots • Tap card for details</div>
             `;
         }
-        
+
         // Update improvement chart if exists
         if (typeof renderScoreHistoryChart === 'function') {
             renderScoreHistoryChart(history);
@@ -936,6 +947,27 @@ document.addEventListener('click', (e) => {
         panel.classList.remove('open');
     }
 });
+
+// Tap-to-toggle tooltip on touch devices
+(function wireScoreTooltipTap() {
+    const container = document.getElementById('swingScoreContainer');
+    if (!container) return;
+    container.addEventListener('click', (e) => {
+        // Only activate on touch-primary devices (hover: none)
+        if (!window.matchMedia('(hover: none)').matches) return;
+        const isOpen = container.classList.toggle('tooltip-open');
+        if (isOpen) {
+            // Close when tapping outside
+            const closeOutside = (ev) => {
+                if (!container.contains(ev.target)) {
+                    container.classList.remove('tooltip-open');
+                    document.removeEventListener('click', closeOutside, { capture: true });
+                }
+            };
+            setTimeout(() => document.addEventListener('click', closeOutside, { capture: true }), 0);
+        }
+    });
+})();
 
 window.updateClubSidebar = (shots) => {
     renderSidebarClubUsage(Array.isArray(shots) ? shots : loadCurrentShotsFromStorage());

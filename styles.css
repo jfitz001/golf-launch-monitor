@@ -711,6 +711,25 @@ nav {
     text-align: center;
 }
 
+/* Tap-to-show tooltip on touch devices */
+.swing-score.tooltip-open .swing-score-tooltip {
+    opacity: 1;
+    visibility: visible;
+    transform: translateX(-50%) translateY(-10px);
+}
+
+/* Score-change pulse animation */
+@keyframes scoreUpdatePulse {
+    0%   { box-shadow: 0 20px 50px -20px rgba(15,75,56,0.6), 0 8px 24px rgba(0,0,0,0.1); }
+    30%  { box-shadow: 0 0 0 8px rgba(196,154,58,0.45), 0 20px 50px -20px rgba(15,75,56,0.6); }
+    60%  { box-shadow: 0 0 0 16px rgba(196,154,58,0.15), 0 20px 50px -20px rgba(15,75,56,0.6); }
+    100% { box-shadow: 0 20px 50px -20px rgba(15,75,56,0.6), 0 8px 24px rgba(0,0,0,0.1); }
+}
+
+.swing-score.score-updated {
+    animation: scoreUpdatePulse 0.9s ease-out forwards;
+}
+
 /* Score History Section */
 .score-history-section {
     background: var(--surface);
@@ -1972,8 +1991,75 @@ nav {
     }
     
     .swing-score-delta {
-        padding: 4px 8px;
-        font-size: 12px;
+        padding: 6px 14px;
+        font-size: 15px;
+        font-weight: 700;
+        border-radius: 24px;
+    }
+
+    .swing-score-delta .delta-arrow {
+        font-size: 17px;
+    }
+
+    /* Tooltip: show inline below score on mobile instead of floating */
+    .swing-score-tooltip {
+        position: static;
+        transform: none !important;
+        opacity: 0;
+        visibility: hidden;
+        max-height: 0;
+        overflow: hidden;
+        margin-top: 0;
+        transition: opacity 0.25s ease, max-height 0.3s ease, margin-top 0.3s ease;
+        box-shadow: none;
+        border-top: 1px solid rgba(255,255,255,0.15);
+        background: rgba(255,255,255,0.1);
+        color: white;
+        border-radius: 0 0 12px 12px;
+    }
+
+    .swing-score-tooltip .tooltip-title {
+        color: rgba(255,255,255,0.9);
+        border-bottom-color: rgba(255,255,255,0.2);
+    }
+
+    .swing-score-tooltip .tooltip-row {
+        color: rgba(255,255,255,0.85);
+    }
+
+    .swing-score-tooltip .tooltip-row.negative span:last-child {
+        color: #fca5a5;
+    }
+
+    .swing-score-tooltip .tooltip-row.positive span:last-child {
+        color: #86efac;
+    }
+
+    .swing-score-tooltip .tooltip-row.total {
+        color: white;
+    }
+
+    .swing-score-tooltip .tooltip-footer {
+        color: rgba(255,255,255,0.6);
+    }
+
+    /* Show tooltip inline when tapped */
+    .swing-score.tooltip-open .swing-score-tooltip {
+        opacity: 1;
+        visibility: visible;
+        max-height: 300px;
+        margin-top: 16px;
+        transform: none !important;
+    }
+
+    /* Tap hint label */
+    .swing-score-label::after {
+        content: ' — tap for details';
+        font-size: 10px;
+        opacity: 0.65;
+        text-transform: none;
+        letter-spacing: 0;
+        font-weight: 400;
     }
     
     .score-history-section {
