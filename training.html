@@ -106,9 +106,17 @@
             const savedData = localStorage.getItem('currentGolfData');
             if (savedData && savedData !== '[]') {
                 golfData = JSON.parse(savedData);
-                document.getElementById('dataLoaded').classList.remove('hidden');
+                const dataLoadedSection = document.getElementById('dataLoaded');
+                dataLoadedSection.classList.remove('hidden');
                 document.getElementById('noData').style.display = 'none';
-                
+
+                // Re-observe the now-visible .drills-section wrapper before drills render
+                requestAnimationFrame(() => {
+                    if (typeof window.reObserveAnimations === 'function') {
+                        window.reObserveAnimations();
+                    }
+                });
+
                 // Generate training drills
                 const insights = analyzeGolfData(golfData);
                 await updateDrills(insights, { aiFirst: true });

@@ -2009,6 +2009,23 @@ async function updateDrills(insights, options = {}) {
     });
 
     drillsContent.innerHTML = html;
+
+    // Newly created .drill-card elements start at opacity:0 (CSS animation
+    // system). The IntersectionObserver only saw the placeholder cards that
+    // existed at page load, so it will never fire for these new elements.
+    // Re-register them now, and add a hard fallback in case the IO is slow.
+    requestAnimationFrame(() => {
+        if (typeof window.reObserveAnimations === 'function') {
+            window.reObserveAnimations();
+        }
+        setTimeout(() => {
+            drillsContent.querySelectorAll('.drill-card').forEach(el => {
+                el.classList.add('anim-visible');
+            });
+            const summaryCard = drillsContent.querySelector('.training-summary-card');
+            if (summaryCard) summaryCard.classList.add('anim-visible');
+        }, 400);
+    });
 }
 
 // Toggle drill expansion
