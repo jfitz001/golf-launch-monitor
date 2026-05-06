@@ -502,7 +502,7 @@ function displayData() {
             // all sections so nothing stays invisible on slow/restricted browsers.
             setTimeout(() => {
                 dataLoadedSection.querySelectorAll(
-                    '.stat-card, .chart-card, .quick-link-card, .score-history-section'
+                    '.stat-card, .chart-card, .quick-link-card, .score-history-section, .drill-card, .drills-section'
                 ).forEach(el => el.classList.add('anim-visible'));
             }, 400);
         });
@@ -2025,6 +2025,17 @@ async function updateDrills(insights, options = {}) {
     });
 
     drillsContent.innerHTML = html;
+
+    requestAnimationFrame(() => {
+        if (typeof window.reObserveAnimations === 'function') {
+            window.reObserveAnimations();
+        }
+        setTimeout(() => {
+            drillsContent.querySelectorAll(
+                '.drill-card:not(.anim-visible), .training-summary-card:not(.anim-visible)'
+            ).forEach(el => el.classList.add('anim-visible'));
+        }, 400);
+    });
 }
 
 // Toggle drill expansion

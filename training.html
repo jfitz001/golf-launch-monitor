@@ -114,10 +114,22 @@
                 golfData = JSON.parse(savedData);
                 document.getElementById('dataLoaded').classList.remove('hidden');
                 document.getElementById('noData').style.display = 'none';
-                
+
                 // Generate training drills
                 const insights = analyzeGolfData(golfData);
                 await updateDrills(insights, { aiFirst: true });
+
+                // Ensure the drills-section wrapper itself is visible
+                requestAnimationFrame(() => {
+                    if (typeof window.reObserveAnimations === 'function') {
+                        window.reObserveAnimations();
+                    }
+                    setTimeout(() => {
+                        document.querySelectorAll(
+                            '.drills-section:not(.anim-visible)'
+                        ).forEach(el => el.classList.add('anim-visible'));
+                    }, 400);
+                });
             } else {
                 document.getElementById('dataLoaded').style.display = 'none';
                 document.getElementById('noData').classList.remove('hidden');
