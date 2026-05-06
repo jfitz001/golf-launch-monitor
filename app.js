@@ -1887,7 +1887,13 @@ async function buildTrainingAiSummary(recommendations, trendContext) {
     const data = await response.json();
     const text = data?.candidates?.[0]?.content?.parts?.[0]?.text || '';
     if (!text) return '';
-    return `<div class="training-ai-summary">${escapeHtml(text).replace(/\n/g, '<br>')}</div>`;
+    // Sanitize first, then convert markdown to HTML (safe because escapeHtml
+    // already blocked any real HTML; only * markers remain at this point).
+    const formatted = escapeHtml(text)
+        .replace(/\*\*([^*\n]+)\*\*/g, '<strong>$1</strong>')
+        .replace(/^[*•\-]\s+/gm, '• ')
+        .replace(/\n/g, '<br>');
+    return `<div class="training-ai-summary">${formatted}</div>`;
 }
 
 async function updateDrills(insights, options = {}) {
@@ -1958,55 +1964,57 @@ async function updateDrills(insights, options = {}) {
         }
     }
 
+    // Trend pills row (compact, sits above drills)
     const trendPills = `
-        <div class=\"training-trend-strip\">
-            <span class=\"trend-pill ${trendContext.metrics.offline.status}\">Offline: ${trendContext.metrics.offline.status}</span>
-            <span class=\"trend-pill ${trendContext.metrics.facePathVariance.status}\">Face/Path: ${trendContext.metrics.facePathVariance.status}</span>
-            <span class=\"trend-pill ${trendContext.metrics.smash.status}\">Smash: ${trendContext.metrics.smash.status}</span>
-            <span class=\"trend-pill ${trendContext.metrics.launch.status}\">Launch: ${trendContext.metrics.launch.status}</span>
+        <div class="training-trend-strip" style="margin-bottom:20px;">
+            <span class="trend-pill ${trendContext.metrics.offline.status}">Offline: ${trendContext.metrics.offline.status}</span>
+            <span class="trend-pill ${trendContext.metrics.facePathVariance.status}">Face/Path: ${trendContext.metrics.facePathVariance.status}</span>
+            <span class="trend-pill ${trendContext.metrics.smash.status}">Smash: ${trendContext.metrics.smash.status}</span>
+            <span class="trend-pill ${trendContext.metrics.launch.status}">Launch: ${trendContext.metrics.launch.status}</span>
         </div>
     `;
 
-    let html = `
-        <div class=\"training-summary-card\">
-            <h4 style=\"margin:0 0 8px 0;\">Session Trend Snapshot</h4>
-            <p style=\"margin:0 0 8px 0; color:var(--text-secondary); font-size:14px;\">Based on ${trendContext.sessionsAnalyzed} saved sessions (latest vs previous window).</p>
-            ${trendPills}
-            ${aiSummaryHtml || '<p style=\"margin-top:10px; color:var(--text-secondary); font-size:14px;\">AI coach summary unavailable. Using deterministic training plan.</p>'}
-        </div>
-    `;
+    // Drills first — always expanded, top 3 only
+    let html = trendPills;
 
-    drillsToShow.forEach((drill, index) => {
+    drillsToShow.slice(0, 3).forEach((drill, index) => {
         const priorityColor = drill.priority >= 12 ? 'var(--danger)' :
             drill.priority >= 9 ? 'var(--warning)' :
                 'var(--primary)';
-        const drillId = `drill-${index}`;
+        const priorityLabel = drill.priority >= 12 ? 'Critical' :
+            drill.priority >= 9 ? 'High Priority' : 'Recommended';
 
-        html += `<div class=\"drill-card expandable-drill\" style=\"border-left-color:${priorityColor}; cursor:pointer;\" onclick=\"toggleDrill('${drillId}')\">
-            <div style=\"display:flex; justify-content:space-between; align-items:start; gap:10px; margin-bottom:8px;\">
-                <div>
-                    <h4 style=\"margin:0;\">${index + 1}. ${drill.title}</h4>
-                    <div style=\"font-size:12px; color:var(--text-secondary); margin-top:4px;\">Club Focus: ${drill.club}</div>
-                </div>
-                <div style=\"display:flex; gap:8px; align-items:center;\">
-                    <span style=\"font-size:11px; color:var(--text-secondary); text-transform:uppercase; letter-spacing:0.5px;\">${drill.priority >= 12 ? 'Critical' : drill.priority >= 9 ? 'High Priority' : 'Recommended'}</span>
-                    <span class=\"drill-toggle\" id=\"${drillId}-toggle\" style=\"font-size:18px; transition:transform 0.3s;\">▼</span>
-                </div>
+        html += `<div class="drill-card drill-card-open" style="border-left-color:${priorityColor};">
+            <div class="drill-badge-row">
+                <span class="drill-number-badge">Drill ${index + 1}</span>
+                <span class="drill-priority-label" style="color:${priorityColor};">${priorityLabel}</span>
             </div>
-            <div style=\"font-size:13px; color:var(--text-secondary); margin-bottom:10px;\"><strong>Issue:</strong> ${drill.issue}</div>
-            <div style=\"font-size:13px; color:var(--text-secondary); margin-bottom:12px;\"><strong>Trend:</strong> ${drill.trendText}</div>
-            <div id=\"${drillId}-content\" class=\"drill-content\" style=\"max-height:0; overflow:hidden; transition:max-height 0.3s ease-out;\">
-                <div style=\"font-size:14px; margin-bottom:10px;\"><strong>Root Cause:</strong> ${drill.rootCause}</div>
-                <div style=\"font-size:14px; margin-bottom:6px;\"><strong>What To Do Today</strong></div>
-                <ol style=\"margin:0 0 12px 20px; color:var(--text-secondary); font-size:14px;\">
-                    ${drill.drillSteps.map(step => `<li style=\"margin-bottom:4px;\">${step}</li>`).join('')}
-                </ol>
-                <div style=\"font-size:13px; color:var(--text-secondary); margin-bottom:6px;\"><strong>Reps/Sets:</strong> ${drill.repsSets}</div>
-                <div style=\"font-size:13px; color:var(--text-secondary); margin-bottom:6px;\"><strong>How You Know It Worked:</strong> ${drill.targetMetric}</div>
-                <div style=\"font-size:13px; color:var(--primary);\"><strong>Retest Rule:</strong> ${drill.retestRule}</div>
-            </div>
+            <h4 class="drill-title">${drill.title}</h4>
+            <div class="drill-club-tag">${drill.club}</div>
+            <div class="drill-why-box">${drill.issue}</div>
+            <div class="drill-steps-heading">What to do today</div>
+            <ol class="drill-steps-ol">
+                ${drill.drillSteps.map(step => `<li>${step}</li>`).join('')}
+            </ol>
+            <div class="drill-reps">${drill.repsSets}</div>
+            <div class="drill-success-box">Done when: ${drill.targetMetric}</div>
         </div>`;
     });
+
+    // AI coach notes collapsed at the bottom
+    if (aiSummaryHtml) {
+        const noteContent = aiSummaryHtml
+            .replace(/^<div class="training-ai-summary">/, '')
+            .replace(/<\/div>$/, '');
+        html += `
+        <div class="coach-notes-card" id="coachNotesCard">
+            <button class="coach-notes-header" onclick="document.getElementById('coachNotesCard').classList.toggle('open')" aria-expanded="false">
+                <span>AI Coach Notes</span>
+                <span class="coach-notes-chevron">▼</span>
+            </button>
+            <div class="coach-notes-body">${noteContent}</div>
+        </div>`;
+    }
 
     drillsContent.innerHTML = html;
 
