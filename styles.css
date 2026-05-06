@@ -399,6 +399,13 @@ nav {
     transform: translateX(0);
 }
 
+/* Session history now lives in page content/filters; remove floating drawer UI. */
+.sessions-toggle,
+.sessions-panel,
+.sessions-overlay {
+    display: none !important;
+}
+
 .sessions-panel-header {
     padding: 24px;
     border-bottom: 1px solid var(--border);
