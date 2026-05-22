@@ -2506,3 +2506,85 @@ a:focus-visible {
         transform: scale(0.97) !important;
     }
 }
+
+/* More intuitive app chrome */
+.main-nav {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+    align-items: center;
+}
+
+.nav-link {
+    min-height: 44px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.nav-link[href="/upload"]::before { content: '+ '; }
+.nav-link[href="/progress"]::before { content: '↗ '; }
+.nav-link[href="/charts"]::before { content: '• '; }
+.nav-link[href="/analysis"]::before { content: '✓ '; }
+.nav-link[href="/training"]::before { content: '↻ '; }
+.nav-link[href="/data"]::before { content: '✎ '; }
+.nav-link[href="/settings"]::before { content: '⚙ '; }
+.nav-link[href="/admin"]::before { content: '★ '; }
+
+.quick-link-card h3 {
+    color: var(--primary-dark);
+}
+
+.quick-link-card p {
+    color: var(--text-secondary);
+}
+
+@media (max-width: 768px) {
+    .container {
+        padding: 16px;
+    }
+
+    header {
+        padding: 24px 20px;
+        border-radius: 22px;
+    }
+
+    .header-top-row {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    header h1 {
+        font-size: clamp(34px, 11vw, 48px);
+        line-height: 1.05;
+        max-width: 10ch;
+    }
+
+    .subtitle {
+        font-size: 17px;
+    }
+
+    .user-bar {
+        width: 100%;
+        justify-content: space-between;
+    }
+
+    .main-nav {
+        flex-wrap: nowrap;
+        overflow-x: auto;
+        padding-bottom: 8px;
+        scroll-snap-type: x proximity;
+        -webkit-overflow-scrolling: touch;
+    }
+
+    .main-nav::-webkit-scrollbar {
+        display: none;
+    }
+
+    .nav-link {
+        flex: 0 0 auto;
+        min-width: 132px;
+        scroll-snap-align: start;
+        font-size: 15px;
+    }
+}

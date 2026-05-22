@@ -1,12 +1,16 @@
-// Netlify Identity authentication - stable binding + deduped sync
+// Netlify Identity authentication - stable binding + deduped sync + invite gate
 const netlifyIdentity = window.netlifyIdentity;
+
+const authConfig = window.__golfAuthConfig || { adminEmail: 'jamiefitzgerald001@gmail.com', inviteStorageKey: 'golfInviteCode' };
+window.__golfAuthConfig = authConfig;
 
 const authRuntime = window.__golfAuthRuntime || {
     handlersBound: false,
     syncByEmail: {},
     lastSyncedEmail: '',
     lastSyncedAt: 0,
-    shownEmail: ''
+    shownEmail: '',
+    inviteVerified: false
 };
 window.__golfAuthRuntime = authRuntime;
 
@@ -19,6 +23,110 @@ const userEmail = document.getElementById('user-email');
 
 if (authSection) authSection.style.display = 'none';
 if (appSection) appSection.style.display = 'none';
+
+function getStoredInviteCode() {
+    return (localStorage.getItem(authConfig.inviteStorageKey) || '').trim();
+}
+
+function getInviteAuthHeaders() {
+    const inviteCode = getStoredInviteCode();
+    return inviteCode ? { 'X-Invite-Code': inviteCode } : {};
+}
+
+window.getInviteAuthHeaders = getInviteAuthHeaders;
+
+function setInviteStatus(message, type = 'info') {
+    const status = document.getElementById('invite-status');
+    if (!status) return;
+    status.textContent = message;
+    status.className = `invite-status ${type}`;
+}
+
+function setInviteVerified(isVerified) {
+    authRuntime.inviteVerified = isVerified;
+    const button = document.getElementById('invite-unlock-btn');
+    const input = document.getElementById('invite-code-input');
+    if (loginBtn) {
+        loginBtn.disabled = !isVerified;
+        loginBtn.classList.toggle('is-disabled', !isVerified);
+        loginBtn.textContent = isVerified ? 'Sign In / Sign Up' : 'Enter Code To Continue';
+    }
+    if (button) button.textContent = isVerified ? 'Unlocked' : 'Unlock';
+    if (input) input.disabled = isVerified;
+}
+
+async function verifyInviteCode(code) {
+    const inviteCode = String(code || '').trim();
+    if (!inviteCode) return false;
+
+    const response = await fetch('/.netlify/functions/verify-invite', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ code: inviteCode })
+    });
+    const result = await response.json().catch(() => ({}));
+    if (!response.ok || !result.valid) {
+        throw new Error(result.error || 'Invalid signup code');
+    }
+    localStorage.setItem(authConfig.inviteStorageKey, inviteCode);
+    return true;
+}
+
+function ensureInviteGate() {
+    if (!authSection || !loginBtn) return;
+    const card = authSection.querySelector('.auth-card');
+    if (!card || document.getElementById('invite-code-input')) return;
+
+    const gate = document.createElement('div');
+    gate.className = 'invite-gate';
+    gate.innerHTML = `
+        <div class="invite-copy">
+            <span class="invite-kicker">Private beta</span>
+            <strong>Signup code required</strong>
+            <span>Existing approved users can unlock once, then sign in normally.</span>
+        </div>
+        <label class="invite-label" for="invite-code-input">Signup Code</label>
+        <div class="invite-row">
+            <input id="invite-code-input" class="invite-input" type="password" autocomplete="one-time-code" placeholder="Enter code" />
+            <button id="invite-unlock-btn" class="invite-unlock-btn" type="button">Unlock</button>
+        </div>
+        <div id="invite-status" class="invite-status">Ask admin for signup code.</div>
+    `;
+    loginBtn.parentElement.insertBefore(gate, loginBtn);
+
+    const input = document.getElementById('invite-code-input');
+    const unlock = document.getElementById('invite-unlock-btn');
+
+    async function unlockInvite() {
+        const code = input?.value || getStoredInviteCode();
+        unlock.disabled = true;
+        setInviteStatus('Checking code...');
+        try {
+            await verifyInviteCode(code);
+            setInviteVerified(true);
+            setInviteStatus('Code accepted. Sign in or create account.', 'success');
+        } catch (error) {
+            localStorage.removeItem(authConfig.inviteStorageKey);
+            setInviteVerified(false);
+            setInviteStatus(error.message || 'Invalid signup code', 'error');
+        } finally {
+            unlock.disabled = false;
+        }
+    }
+
+    unlock.addEventListener('click', unlockInvite);
+    input.addEventListener('keydown', (event) => {
+        if (event.key === 'Enter') unlockInvite();
+    });
+
+    const storedCode = getStoredInviteCode();
+    if (storedCode) {
+        input.value = storedCode;
+        unlockInvite();
+    } else {
+        setInviteVerified(false);
+    }
+}
 
 function showApp(user) {
     if (!user) return;
@@ -46,7 +154,7 @@ function showApp(user) {
     }
 
     const adminLink = document.getElementById('admin-link');
-    if (adminLink && user.email === 'jamiefitzgerald001@gmail.com') {
+    if (adminLink && user.email === authConfig.adminEmail) {
         adminLink.style.display = 'inline-block';
     }
 
@@ -61,6 +169,7 @@ function showApp(user) {
 
 function showAuth() {
     authRuntime.shownEmail = '';
+    ensureInviteGate();
     if (appSection) {
         appSection.style.display = 'none';
         appSection.classList.remove('ready');
@@ -90,10 +199,11 @@ async function syncUserToSupabase(user) {
     const promise = (async () => {
         const response = await fetch('/.netlify/functions/sync-user', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: { 'Content-Type': 'application/json', ...getInviteAuthHeaders() },
             body: JSON.stringify({
                 email,
-                netlify_id: user.id || null
+                netlify_id: user.id || null,
+                invite_code: getStoredInviteCode() || null
             })
         });
 
@@ -144,7 +254,14 @@ function bindIdentityHandlers() {
     });
 
     netlifyIdentity.on('login', async (user) => {
-        await syncUserToSupabase(user);
+        const result = await syncUserToSupabase(user);
+        if (result && result.success === false && result.error) {
+            setInviteVerified(false);
+            showAuth();
+            setInviteStatus(result.error, 'error');
+            netlifyIdentity.close();
+            return;
+        }
         showApp(user);
         netlifyIdentity.close();
 
@@ -161,7 +278,12 @@ function bindIdentityHandlers() {
 }
 
 if (loginBtn) {
-    loginBtn.addEventListener('click', () => {
+    loginBtn.addEventListener('click', async () => {
+        if (!authRuntime.inviteVerified) {
+            showAuth();
+            setInviteStatus('Enter signup code first.', 'error');
+            return;
+        }
         netlifyIdentity?.open();
     });
 }
@@ -172,5 +294,19 @@ if (logoutBtn) {
     });
 }
 
+ensureInviteGate();
 bindIdentityHandlers();
+
+window.addEventListener('load', () => {
+    setTimeout(() => {
+        const authVisible = authSection && getComputedStyle(authSection).display !== 'none';
+        const appVisible = appSection && getComputedStyle(appSection).display !== 'none';
+        if (!authVisible && !appVisible) {
+            showAuth();
+            if (!netlifyIdentity) {
+                setInviteStatus('Auth widget still loading. Refresh if sign in does not open.', 'error');
+            }
+        }
+    }, 1200);
+});
 window.getCurrentUser = () => netlifyIdentity?.currentUser?.();
