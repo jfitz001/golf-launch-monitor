@@ -47,9 +47,9 @@ function setInviteVerified(isVerified) {
     const button = document.getElementById('invite-unlock-btn');
     const input = document.getElementById('invite-code-input');
     if (loginBtn) {
-        loginBtn.disabled = !isVerified;
-        loginBtn.classList.toggle('is-disabled', !isVerified);
-        loginBtn.textContent = isVerified ? 'Sign In / Sign Up' : 'Enter Code To Continue';
+        loginBtn.disabled = false;
+        loginBtn.classList.remove('is-disabled');
+        loginBtn.textContent = isVerified ? 'Sign In / Sign Up' : 'Existing User Sign In';
     }
     if (button) button.textContent = isVerified ? 'Unlocked' : 'Unlock';
     if (input) input.disabled = isVerified;
@@ -83,14 +83,14 @@ function ensureInviteGate() {
         <div class="invite-copy">
             <span class="invite-kicker">Private beta</span>
             <strong>Signup code required</strong>
-            <span>Existing approved users can unlock once, then sign in normally.</span>
+            <span>Existing users can sign in now. New users need code before account access.</span>
         </div>
         <label class="invite-label" for="invite-code-input">Signup Code</label>
         <div class="invite-row">
             <input id="invite-code-input" class="invite-input" type="password" autocomplete="one-time-code" placeholder="Enter code" />
             <button id="invite-unlock-btn" class="invite-unlock-btn" type="button">Unlock</button>
         </div>
-        <div id="invite-status" class="invite-status">Ask admin for signup code.</div>
+        <div id="invite-status" class="invite-status">Existing user? Sign in below. New user? Enter signup code first.</div>
     `;
     loginBtn.parentElement.insertBefore(gate, loginBtn);
 
@@ -279,11 +279,6 @@ function bindIdentityHandlers() {
 
 if (loginBtn) {
     loginBtn.addEventListener('click', async () => {
-        if (!authRuntime.inviteVerified) {
-            showAuth();
-            setInviteStatus('Enter signup code first.', 'error');
-            return;
-        }
         netlifyIdentity?.open();
     });
 }
